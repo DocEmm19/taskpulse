@@ -1,0 +1,230 @@
+--- a/src/db/database.ts
++++ b/src/db/database.ts
+@@ -17,6 +17,7 @@
+     await db.execAsync('PRAGMA journal_mode = WAL;');
+     await db.execAsync('PRAGMA foreign_keys = ON;');
+     await runMigrations(db);
++    await ensureColumn(db, 'task_activity', 'actor_name', 'TEXT');
+     dbInstance = db;
+     return db;
+   })();
+@@ -24,6 +25,17 @@
+   return openingPromise;
+ }
+ 
++/** Additive, idempotent "add column if missing" migration — used for columns
++ * introduced after a table's original CREATE TABLE IF NOT EXISTS, since that
++ * statement is a no-op once the table already exists on a device. Never
++ * touches existing columns/data. */
++async function ensureColumn(db: SQLite.SQLiteDatabase, table: string, column: string, type: string): Promise<void> {
++  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
++  if (!cols.some((c) => c.name === column)) {
++    await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
++  }
++}
++
+ async function runMigrations(db: SQLite.SQLiteDatabase) {
+   await db.execAsync(`
+     CREATE TABLE IF NOT EXISTS users (
+@@ -110,6 +122,7 @@
+       event_type TEXT NOT NULL,
+       description TEXT NOT NULL,
+       actor_device_id TEXT,
++      actor_name TEXT,
+       created_at TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_activity_task ON task_activity(task_id);
+--- a/src/types/models.ts
++++ b/src/types/models.ts
+@@ -84,7 +84,8 @@
+   | 'reminder_set'
+   | 'conflict_resolved'
+   | 'deleted'
+-  | 'shared';
++  | 'shared'
++  | 'reopened';
+ 
+ export interface TaskActivity {
+   id: string;
+@@ -92,6 +93,7 @@
+   event_type: ActivityEventType;
+   description: string;
+   actor_device_id: string | null;
++  actor_name: string | null;
+   created_at: string;
+ }
+ 
+--- a/src/store/sessionStore.ts
++++ b/src/store/sessionStore.ts
+@@ -76,3 +76,10 @@
+   const { supabaseUserId, userId } = useSessionStore.getState();
+   return supabaseUserId || userId || 'local-user';
+ }
++/** The display name of whoever is using the app on this device right now —
++ * same identity already shown on Home/More screens (`userName` in this
++ * store). Used to attribute Activity History entries to a person, not just
++ * a device id. */
++export function getCurrentUserName(): string {
++  return useSessionStore.getState().userName || 'Unknown';
++}
+--- a/src/db/helpers.ts
++++ b/src/db/helpers.ts
+@@ -2,7 +2,7 @@
+ import { newId } from '../lib/uuid';
+ import { notifyTablesChanged } from './events';
+ import { ActivityEventType, SyncOperation } from '../types/models';
+-import { getDeviceId } from '../store/sessionStore';
++import { getDeviceId, getCurrentUserName } from '../store/sessionStore';
+ 
+ export function nowIso(): string {
+   return new Date().toISOString();
+@@ -13,9 +13,9 @@
+ export async function logActivity(taskId: string, eventType: ActivityEventType, description: string) {
+   const db = await getDb();
+   await db.runAsync(
+-    `INSERT INTO task_activity (id, task_id, event_type, description, actor_device_id, created_at)
+-     VALUES (?, ?, ?, ?, ?, ?)`,
+-    [newId(), taskId, eventType, description, getDeviceId(), nowIso()]
++    `INSERT INTO task_activity (id, task_id, event_type, description, actor_device_id, actor_name, created_at)
++     VALUES (?, ?, ?, ?, ?, ?, ?)`,
++    [newId(), taskId, eventType, description, getDeviceId(), getCurrentUserName(), nowIso()]
+   );
+   notifyTablesChanged('task_activity');
+ }
+--- a/src/db/repositories/tasks.ts
++++ b/src/db/repositories/tasks.ts
+@@ -111,7 +111,14 @@
+   if (patch.status !== undefined && patch.status !== before.status) {
+     sets.push('status = ?');
+     params.push(patch.status);
+-    activityLines.push(`Status changed to ${patch.status.replace('_', ' ')}`);
++    if (before.status === 'completed' && patch.status !== 'completed') {
++      // Un-completing a task (via the "Reopen" toggle on the Complete button,
++      // or any other status change away from completed) is its own required
++      // activity event, distinct from the generic status-change line below.
++      activityLines.push('Task reopened');
++    } else {
++      activityLines.push(`Status changed to ${patch.status.replace('_', ' ')}`);
++    }
+     if (patch.status === 'completed') {
+       sets.push('completed_at = ?');
+       params.push(now);
+@@ -143,6 +150,8 @@
+   for (const line of activityLines) {
+     const eventType = line.startsWith('Priority')
+       ? 'priority_changed'
++      : line.startsWith('Task reopened')
++      ? 'reopened'
+       : line.startsWith('Status')
+       ? 'status_changed'
+       : line.startsWith('Due date')
+--- a/src/lib/calendarIntegration.ts
++++ b/src/lib/calendarIntegration.ts
+@@ -1,5 +1,5 @@
+ import * as Calendar from 'expo-calendar';
+-import { Platform } from 'react-native';
++import { Linking, Platform } from 'react-native';
+ 
+ /** Adds an event to whatever calendar app is already on the phone (Req. #21).
+  * This intentionally does NOT re-implement a calendar — it hands off to
+@@ -15,7 +15,7 @@
+  * every desktop/mobile calendar app (Google Calendar, Outlook, Apple
+  * Calendar, etc.) can import. This keeps the native Android/iOS path
+  * completely untouched. */
+-function addEventToDeviceCalendarWeb(data: { title: string; startDate: Date; endDate: Date; location?: string; notes?: string }): string {
++export function addEventToDeviceCalendarWeb(data: { title: string; startDate: Date; endDate: Date; location?: string; notes?: string }): string {
+   const escape = (s: string) => s.replace(/[\r\n]+/g, ' ').replace(/([,;])/g, '\\$1');
+   const lines = [
+     'BEGIN:VCALENDAR',
+@@ -46,6 +46,23 @@
+   return `web-ics-${Date.now()}`;
+ }
+ 
++/** Primary Web "Add to Calendar" action: Google Calendar's "quick add" URL,
++ * opened in a new tab, pre-filled with the event. This is Google-specific by
++ * nature (there's no cross-provider "open a calendar action" API on the
++ * web), which is exactly why `addEventToDeviceCalendarWeb` above stays
++ * available as the secondary/fallback option for Outlook, Apple Calendar,
++ * or anything else that can import an .ics file. */
++export function openGoogleCalendarEvent(data: { title: string; startDate: Date; endDate: Date; location?: string; notes?: string }): void {
++  const params = new URLSearchParams({
++    action: 'TEMPLATE',
++    text: data.title,
++    dates: `${icsDate(data.startDate)}/${icsDate(data.endDate)}`,
++  });
++  if (data.notes) params.set('details', data.notes);
++  if (data.location) params.set('location', data.location);
++  Linking.openURL(`https://calendar.google.com/calendar/render?${params.toString()}`);
++}
++
+ export async function addEventToDeviceCalendar(data: {
+   title: string;
+   startDate: Date;
+--- a/src/screens/TaskDetailScreen.tsx
++++ b/src/screens/TaskDetailScreen.tsx
+@@ -12,7 +12,7 @@
+ import { unlinkContactFromTask } from '../db/repositories/contacts';
+ import { deleteTaskEmail, deleteTaskLink } from '../db/repositories/taskExtras';
+ import { callNumber, copyToClipboard, openEmail, openMaps, openWebLink, openWhatsApp, saveContactToDevice, shareTask } from '../lib/actions';
+-import { addEventToDeviceCalendar } from '../lib/calendarIntegration';
++import { addEventToDeviceCalendar, addEventToDeviceCalendarWeb, openGoogleCalendarEvent } from '../lib/calendarIntegration';
+ import { colors, spacing, typography } from '../theme/theme';
+ 
+ /** react-native-web's `Alert.alert` is a no-op stub (confirmed: it renders
+@@ -114,11 +114,24 @@
+   }
+ 
+   async function handleAddToCalendar() {
++    if (Platform.OS === 'web') {
++      // Primary web action: open a pre-filled Google Calendar "quick add" tab
++      // — an actual calendar action, not just a file download. The .ics
++      // download (handleDownloadIcs below) stays available as the fallback
++      // for Outlook/Apple Calendar/etc. Native Android/iOS path below is
++      // unchanged.
++      openGoogleCalendarEvent(buildCalendarEventData());
++      return;
++    }
+     const eventId = await addEventToDeviceCalendar(buildCalendarEventData());
+     if (eventId) Alert.alert('Added to calendar', 'This event was added to your phone calendar.');
+     else Alert.alert('Could not add to calendar', 'Please check calendar permissions in Settings.');
+   }
+ 
++  function handleDownloadIcs() {
++    addEventToDeviceCalendarWeb(buildCalendarEventData());
++  }
++
+   return (
+     <ScreenContainer>
+       <ScrollView contentContainerStyle={styles.content}>
+@@ -227,6 +240,11 @@
+             <Text style={styles.emptyText}>Not added to your device calendar yet.</Text>
+           )}
+           <SecondaryButton label="Add to Calendar" icon="calendar-outline" onPress={handleAddToCalendar} />
++          {Platform.OS === 'web' && (
++            <Pressable onPress={handleDownloadIcs} style={styles.icsFallbackLink}>
++              <Text style={styles.icsFallbackText}>Or download .ics file (Outlook, Apple Calendar, etc.)</Text>
++            </Pressable>
++          )}
+         </SectionCard>
+ 
+         {/* Location */}
+@@ -284,7 +302,9 @@
+           <SectionCard title="Activity History" icon="pulse-outline">
+             {activity.map((a) => (
+               <View key={a.id} style={styles.activityRow}>
+-                <Text style={styles.remarkDate}>{format(new Date(a.created_at), 'dd-MMM, h:mm a')}</Text>
++                <Text style={styles.remarkDate}>
++                  {format(new Date(a.created_at), 'dd-MMM, h:mm a')} — {a.actor_name ?? 'Unknown'}
++                </Text>
+                 <Text style={styles.activityText}>{a.description}</Text>
+               </View>
+             ))}
+@@ -342,6 +362,8 @@
+   metaValue: { ...typography.bodyMedium, color: colors.textPrimary },
+   remarkInputRow: { marginBottom: spacing.xs },
+   emptyText: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic', paddingVertical: spacing.sm },
++  icsFallbackLink: { alignItems: 'center', paddingTop: spacing.xs },
++  icsFallbackText: { ...typography.tiny, color: colors.brand },
+   remarkItem: { borderTopWidth: 1, borderTopColor: colors.border, paddingVertical: spacing.sm },
+   remarkDate: { ...typography.tiny, color: colors.textMuted, marginBottom: 2 },
+   remarkBody: { ...typography.body, color: colors.textPrimary },

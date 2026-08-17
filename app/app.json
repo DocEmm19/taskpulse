@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "Gaurav's Task Manager",
+    "slug": "app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "taskmanager",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to attach photos and record videos to a task.",
+        "NSMicrophoneUsageDescription": "Used to record voice notes attached to a task.",
+        "NSPhotoLibraryUsageDescription": "Used to attach photos and videos from your library to a task.",
+        "NSPhotoLibraryAddUsageDescription": "Used to save shared images back to your library.",
+        "NSCalendarsUsageDescription": "Used to add meetings and events from a task to your calendar.",
+        "NSContactsUsageDescription": "Used to save a task's contact to your phone's address book."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_CALENDAR",
+        "WRITE_CALENDAR",
+        "READ_CONTACTS",
+        "WRITE_CONTACTS",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "baseUrl": "/taskpulse/"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-audio",
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2452E8"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Used to attach photos and videos from your library to a task.",
+          "cameraPermission": "Used to attach photos and record videos to a task."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Used to add meetings and events from a task to your calendar."
+        }
+      ],
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "Used to save a task's contact to your phone's address book."
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ]
+  }
+}
