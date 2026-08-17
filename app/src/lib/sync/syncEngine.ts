@@ -8,6 +8,41 @@ import { SyncQueueItem } from '../../types/models';
 import { DirectCloudTable, TaskChildCloudTable, TABLE_COLUMNS, TASK_CHILD_COLUMNS } from './syncTables';
 import { pullDirectTables, pullTaskChildren } from './pull';
 import { startRealtime } from './realtime';
+import { isWeb } from '../platform';
+
+// ----------------------------------------------------------------------------
+// Connectivity — platform-aware. On WEB we must NOT touch NetInfo at all:
+// NetInfo's default web reachability check does a recurring `HEAD` against
+// the DOMAIN ROOT (not the app's base path), which 404s on GitHub Pages and
+// floods the console — and if that reachability probe ever reports
+// unreachable, it would silently disable sync in production. `navigator.
+// onLine` is a local, no-network browser signal and is COEP/CORP-safe (no
+// cross-origin fetch), so it's the correct substitute on web. Native keeps
+// using NetInfo exactly as before.
+// ----------------------------------------------------------------------------
+
+async function isOnline(): Promise<boolean> {
+  if (isWeb) {
+    return typeof navigator === 'undefined' ? true : navigator.onLine;
+  }
+  const net = await NetInfo.fetch();
+  return !!net.isConnected;
+}
+
+/** Subscribes `cb` to "connectivity (re)established" events and returns an
+ * unsubscribe function. Web: `window`'s `online` event. Native: NetInfo's
+ * addEventListener, firing only on transitions to connected — unchanged from
+ * the prior behavior. */
+function subscribeConnectivity(cb: () => void): () => void {
+  if (isWeb) {
+    const handler = () => cb();
+    window.addEventListener('online', handler);
+    return () => window.removeEventListener('online', handler);
+  }
+  return NetInfo.addEventListener((state) => {
+    if (state.isConnected) cb();
+  });
+}
 
 // ----------------------------------------------------------------------------
 // Sync Engine — implements ARCHITECTURE.md §4. This is the ONLY module in the
@@ -54,12 +89,11 @@ const TASK_CHILD_TABLES: Record<string, TaskChildCloudTable> = {
 let isRunning = false;
 let timer: ReturnType<typeof setInterval> | null = null;
 let stopRealtime: (() => void) | null = null;
+let stopConnectivity: (() => void) | null = null;
 
 export function startSyncEngine() {
   if (timer) return; // guards double-start: also prevents a duplicate Realtime channel below
-  NetInfo.addEventListener((state) => {
-    if (state.isConnected) runSyncCycle();
-  });
+  stopConnectivity = subscribeConnectivity(() => runSyncCycle());
   timer = setInterval(runSyncCycle, 30_000);
   runSyncCycle();
 
@@ -75,13 +109,14 @@ export function stopSyncEngine() {
   timer = null;
   if (stopRealtime) stopRealtime();
   stopRealtime = null;
+  if (stopConnectivity) stopConnectivity();
+  stopConnectivity = null;
 }
 
 export async function runSyncCycle(): Promise<void> {
   if (isRunning) return;
   if (!isSupabaseConfigured()) return; // fully offline mode — nothing to do
-  const net = await NetInfo.fetch();
-  if (!net.isConnected) return;
+  if (!(await isOnline())) return;
 
   isRunning = true;
   try {

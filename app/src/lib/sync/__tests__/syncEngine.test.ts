@@ -209,3 +209,97 @@ describe('sanitizeRow (Task 10 data-integrity fix)', () => {
     expect(result.body).toBe('a remark');
   });
 });
+
+// ----------------------------------------------------------------------------
+// Web connectivity path (bug fix): on web, syncEngine must gate/trigger off
+// `navigator.onLine` / the `online` window event and must NEVER touch NetInfo
+// — NetInfo's default web reachability check HEADs the domain root, which
+// 404s on GitHub Pages and, worse, can silently disable sync if it ever
+// reports "unreachable". This is verified by asserting NetInfo.fetch and
+// NetInfo.addEventListener are never called once `react-native`'s Platform.OS
+// is 'web'.
+//
+// `isWeb` (../../platform) is a module-scope const computed once at import
+// time from `Platform.OS`, so it can't be flipped with a simple jest.mock
+// value swap mid-file the way the other collaborators above are. Each test
+// here does jest.resetModules() + jest.doMock('react-native', ...) and then
+// freshly requires syncEngine (and its mocked collaborators) — the same
+// pattern already used by webReminders.test.ts in this codebase for the same
+// "Platform.OS must be read fresh per test" constraint.
+// ----------------------------------------------------------------------------
+describe('connectivity — web path never calls NetInfo', () => {
+  afterEach(() => {
+    delete (global as any).window;
+    delete (global as any).navigator;
+    jest.dontMock('react-native');
+    jest.resetModules();
+  });
+
+  function loadWebSyncEngine(onLine: boolean) {
+    jest.resetModules();
+    jest.doMock('react-native', () => ({ Platform: { OS: 'web' } }));
+    jest.doMock('@react-native-community/netinfo', () => ({
+      __esModule: true,
+      default: { fetch: jest.fn(), addEventListener: jest.fn() },
+    }));
+    jest.doMock('../supabaseClient', () => ({
+      __esModule: true,
+      getSupabase: jest.fn(() => null),
+      isSupabaseConfigured: jest.fn(() => true),
+      ATTACHMENTS_BUCKET: 'attachments-private',
+    }));
+    jest.doMock('../../../store/sessionStore', () => ({
+      __esModule: true,
+      getCurrentUserId: jest.fn(() => 'user-1'),
+    }));
+    jest.doMock('../pull', () => ({
+      __esModule: true,
+      pullDirectTables: jest.fn(async () => []),
+      pullTaskChildren: jest.fn(async () => undefined),
+    }));
+    jest.doMock('../../../db/database', () => ({
+      __esModule: true,
+      getDb: jest.fn(async () => makeEmptyQueueDb()),
+    }));
+
+    (global as any).navigator = { onLine };
+    const windowMock = { addEventListener: jest.fn(), removeEventListener: jest.fn() };
+    (global as any).window = windowMock;
+
+    const netinfo = require('@react-native-community/netinfo').default;
+    const database = require('../../../db/database');
+    const engine = require('../syncEngine');
+    return { netinfo, database, engine, windowMock };
+  }
+
+  test('online — runSyncCycle proceeds (reads sync_queue) without ever calling NetInfo', async () => {
+    const { netinfo, database, engine } = loadWebSyncEngine(true);
+
+    await engine.runSyncCycle();
+
+    expect(netinfo.fetch).not.toHaveBeenCalled();
+    expect(netinfo.addEventListener).not.toHaveBeenCalled();
+    expect(database.getDb).toHaveBeenCalled();
+  });
+
+  test('offline (navigator.onLine === false) — runSyncCycle no-ops, still without calling NetInfo', async () => {
+    const { netinfo, database, engine } = loadWebSyncEngine(false);
+
+    await engine.runSyncCycle();
+
+    expect(netinfo.fetch).not.toHaveBeenCalled();
+    expect(netinfo.addEventListener).not.toHaveBeenCalled();
+    expect(database.getDb).not.toHaveBeenCalled();
+  });
+
+  test('startSyncEngine subscribes via window "online" event, not NetInfo; stopSyncEngine tears it down', () => {
+    const { netinfo, engine, windowMock } = loadWebSyncEngine(true);
+
+    engine.startSyncEngine();
+    expect(windowMock.addEventListener).toHaveBeenCalledWith('online', expect.any(Function));
+    expect(netinfo.addEventListener).not.toHaveBeenCalled();
+
+    engine.stopSyncEngine();
+    expect(windowMock.removeEventListener).toHaveBeenCalledWith('online', expect.any(Function));
+  });
+});
