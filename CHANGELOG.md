@@ -19,6 +19,63 @@ Copy this template for each new change:
 
 ---
 
+## [2026-08-20] New Task screen: fix attachment delete + harden Due Date/Reminder click
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), functional bug-fix only — no layout/spacing/color changes
+- What:
+  - Attachment delete root cause found and fixed: `AttachmentsSection.tsx`'s `confirmDelete()` used `Alert.alert(title, message, [Cancel, Delete])` — the same no-op-on-web stub already identified for Create Task's validation earlier in this branch. Its `[Delete]` button (which held the actual deletion code) never rendered and never fired on web, so the trash icon did nothing. Now uses `window.confirm` on web (matching the existing pattern in `TaskDetailScreen.tsx`'s `handleDelete`) and still uses `Alert.alert` with real buttons on native. Deleting removes only that specific attachment (by id/localId) from the pending list or DB; verified with 4 attachments present that each can be individually removed in any order down to empty, and that a removed pending attachment is never included when Create Task runs afterward.
+  - Also fixed a related resource leak while in there: recorded audio's original `blob:` object URL (from the web `MediaRecorder`) was never released after being converted to a `data:` URL for storage — `persistLocalFileWeb` now calls `URL.revokeObjectURL` on it once the conversion is done.
+  - Due Date/Reminder: could not reproduce actual unclickability again in this environment (same as before — DOM/pointer-event inspection and real clicks all worked), but hardened the click path regardless per explicit instruction: the icon+text area is now wrapped in a `Pressable` that explicitly calls `.focus()` + `.showPicker()` on the real underlying `<input type="date"|"datetime-local">` via a ref, as a second, independent trigger alongside the existing invisible-overlay-input's own native click-to-open behavior. Still the same real HTML date/datetime-local input under the hood (not `@react-native-community/datetimepicker`, which has no web implementation) — no visual change.
+- Why: user-reported that attachment delete did nothing on web, and asked for Due Date/Reminder click reliability to be hardened; explicitly UI/layout-frozen this round — functional fix only.
+- Files touched: app/src/components/AttachmentsSection.tsx (confirmDelete only), app/src/components/DateTimeField.web.tsx (added ref + explicit showPicker() trigger, no style changes), app/src/lib/localFiles.ts (revoke object URL after conversion)
+- Tested: tsc pass · npm test pass (85, no new tests added — the fixes are environment-detection/DOM-API calls better covered by browser testing than unit tests, per the existing jest-expo native-module constraints already documented in this file's other entries) · Playwright at 360/390/430/1280/1440px: zero horizontal overflow at every width; Due Date/Reminder open via both icon-click and center-click, fill and persist correctly (including correct pre-fill on Edit); all 4 attachment types (image, PDF, video, recorded audio) added and individually deleted without affecting the others, down to the empty state, then a fresh attachment added and Create Task still succeeds; Create Task after add+delete correctly excludes the deleted attachments on the resulting Task Detail screen; Assigned To/Company/Create Task regression-checked and still working; zero console errors in any run
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: no business logic, database schema, or UI/layout changed this round — see the two entries below for the visual redesign passes on the same screen.
+
+---
+
+## [2026-08-20] New Task screen: compact corporate-style layout refinement
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), follow-up refinement to the previous redesign
+- What: Second visual pass on the same screen — the prior redesign's large pastel field-group cards read as too big/consumer-colorful, so replaced them with a "Microsoft 365 / Linear"-style compact corporate look: white input backgrounds, thin gray borders, a subtle 3px colored left-border + small icon + tinted label per field (Task/Due Date = blue, Priority = amber, Assigned To = purple, Company = green, Reminder = teal; Category/Remarks/Add More/Attachments stay neutral), 6-10px corner radii, and tighter vertical spacing. Same 2-column desktop grid (Task+Priority, Assigned To+Company, Due Date+Reminder), single column on mobile — one component for both, no separate mobile screen. Content is now width-capped at ~1040px and centered on desktop instead of stretching edge to edge. Attachments' action buttons now wrap onto multiple rows (compact ~80x64 each) instead of a horizontal scroll strip, so nothing scrolls sideways at any width. `LabeledInput` (shared component) gained optional `icon`/`accentColor` props — both undefined by default, so every other existing screen using it renders pixel-identical to before.
+- Why: requested as a follow-up refinement — same functionality, more restrained/professional visual design, fully responsive with zero horizontal scrolling from 360px through 1440px+.
+- Files touched: app/src/screens/NewEditTaskScreen.tsx, app/src/components/Common.tsx (LabeledInput: additive icon/accentColor props), app/src/components/DateTimeField.web.tsx (label tinting, radius), app/src/components/AttachmentsSection.tsx (action row: horizontal-scroll → wrapping grid, style-only), app/src/theme/theme.ts (fieldAccents trimmed to the six accented fields)
+- Tested: tsc pass · npm test pass (85) · Playwright at 1280px, 1440px, 360px, 390px, 430px — zero horizontal overflow at every width, Due Date/Reminder both real-click-focusable and fillable, Create Task succeeds (with no attachment, with a pending recorded-audio attachment), Assigned To + Company persist and correctly link a Contact, zero console errors in any run
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: no business/database logic touched — this and the entry below are UI-only passes on the same screen.
+
+---
+
+## [2026-08-20] New Task screen: web-alert fix + compact multi-color redesign
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), follow-up to PR #2 testing feedback
+- What:
+  - Investigated a report that Due Date, Reminder, and Create Task were all broken when testing PR #2 in a GitHub Codespace. Could not reproduce any of the three in this sandbox across dev server + a full production `expo export -p web` build (real clicks, DOM/pointer-event inspection, console/network monitoring, with and without a pending audio attachment) — `DateTimeField.web.tsx` is confirmed to be what's actually bundled (grepped the built JS for `datetime-local`/`toInputValue`; the old native picker's warning string is absent). Did find and fix one real, confirmed gap: `NewEditTaskScreen.tsx`'s `handleSave()` used `Alert.alert` for both its validation checks (missing title/category) and its catch-block — `Alert.alert` is a no-op stub on web (react-native-web renders nothing, calls no callback), so any silent validation failure or thrown error looked exactly like "Create Task does nothing." Now uses the same `window.alert`-based `webAlert()` pattern already established in `TaskDetailScreen.tsx`.
+  - Redesigned the New Task screen's layout per new requirements: compact two-column grid on wide/desktop viewports (Title+Priority, Assigned To+Company, Due Date+Reminder rows), single-column stacking on mobile, a subtle limited color accent per field group (blue/amber/purple/green/indigo/teal/neutral), and a compact header-right "Create Task"/"Save" button so it's reachable without scrolling. Promoted "Company" from the hidden "+ Contact" section to an always-visible field next to Assigned To; the contact-linking save logic now creates/links a contact whenever Contact Name or Company is filled (falling back to Assigned To as the contact's name if only Company is given), instead of requiring the "+ Contact" section to be expanded.
+  - Attachments, Assigned To persistence, and Create Task's core save flow were left untouched (no logic changes beyond the contact-linking condition above).
+- Why: reported bugs needed root-causing (not just re-assumed-fixed), and the New Task screen needed a more compact, professional, color-differentiated layout without touching working functionality.
+- Files touched: app/src/screens/NewEditTaskScreen.tsx, app/src/components/DateTimeField.web.tsx (added optional accentColor/accentSoft props, backward-compatible), app/src/components/DateTimeField.tsx (added the same optional props to the type only, for cross-platform type-checking — native rendering unchanged), app/src/theme/theme.ts (added `fieldAccents`, additive only)
+- Tested: tsc pass · npm test pass (85) · Playwright against a freshly restarted dev server at both 1280px (desktop) and 390px (mobile) widths — Due Date and Reminder both real-click-focusable and fillable, Create Task succeeds with no attachment, with a pending recorded-audio attachment, and with Assigned To + Company (verified the resulting task's Contact section shows the right name/company), zero console errors in any run
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: the Due Date/Reminder/Create-Task Codespace reports could not be reproduced here — if they persist after this update, the most useful next diagnostic would be actual browser console output from the Codespace session, or confirmation of a hard refresh / service-worker cache clear.
+
+---
+
+## [2026-08-20] Fix New Task screen: attachments, Assigned To, Due Date
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), per bug report from testing the New Task screen
+- What:
+  - Attachments (Gallery/Photo, PDF, Record Audio, Video File) can now be picked on the New Task screen itself, reusing the exact same picker components/logic as the Task Detail screen. Since attachments require a saved task id in the DB, picked files are held locally ("pending") and committed to the task the moment it's created.
+  - Due Date / Reminder / any date-time field was completely non-functional on web: `@react-native-community/datetimepicker` has no web implementation (its fallback just renders nothing and console.warns), and `DateTimeField.tsx`'s picker markup was only rendered when `Platform.OS === 'ios'`, so tapping the field silently did nothing on web. Added `DateTimeField.web.tsx` (Metro's platform-extension resolution) using the browser's native date/time input, invisibly overlaid on the same-looking row — native iOS/Android untouched.
+  - Assigned To: typing/saving on task creation already worked; fixed a related bug where editing an existing task's Assigned To value was silently dropped because `TaskPatch`/`updateTask` never accepted an `assignedToName` field.
+- Why: reported as broken/unclickable in manual testing of the New Task screen; verified root causes via headless + mobile-emulated browser testing against both the dev server and a production `expo export -p web` build.
+- Files touched: app/src/components/DateTimeField.web.tsx (new), app/src/lib/pendingAttachments.ts (new), app/src/components/AttachmentsSection.tsx, app/src/screens/NewEditTaskScreen.tsx, app/src/db/repositories/tasks.ts, plus new tests under app/src/components/__tests__/ and app/src/db/__tests__/updateTaskAssignedTo.test.ts
+- Tested: tsc pass · npm test pass (85) · build:web pass · manually verified via Playwright against both `expo start --web` and a production `expo export -p web` build (Due Date, Assigned To, and a picked PDF all persisted correctly to a newly created task)
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: none — native iOS/Android DateTimeField and the Task Detail attachments flow are unchanged.
+
+---
+
 ## [2026-08-17] v1 baseline (starting point — do not edit, for reference)
 - Branch: main
 - Who: Piyush (build) — handed to Gaurav

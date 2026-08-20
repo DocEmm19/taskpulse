@@ -1,19 +1,39 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Alert, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Chip, LabeledInput, PrimaryButton, SecondaryButton } from '../components/Common';
 import { DateTimeField } from '../components/DateTimeField';
+import { AttachmentsSection, PendingAttachment } from '../components/AttachmentsSection';
 import { useLiveQuery } from '../db/useLiveQuery';
 import { listCategories } from '../db/repositories/categories';
 import { createTask, updateTask } from '../db/repositories/tasks';
+import { addAttachment } from '../db/repositories/attachments';
 import { getTaskFull } from '../db/repositories/taskFull';
 import { createContact, linkContactToTask } from '../db/repositories/contacts';
 import { addTaskEmail, addTaskLink, setTaskLocation, setTaskMeeting, setTravelPlan, addReminder } from '../db/repositories/taskExtras';
 import { scheduleLocalReminder } from '../lib/notifications';
 import { canUseLocalNotifications, isWeb } from '../lib/platform';
 import { ensureWebNotificationPermission, scheduleWebReminder, webNotificationsSupported } from '../lib/webReminders';
-import { colors, spacing, typography } from '../theme/theme';
+import { colors, fieldAccents, priorityMeta, radius, spacing, typography } from '../theme/theme';
 import { CITY_OPTIONS, Priority } from '../types/models';
+
+// Two-column on tablet/desktop widths, single column on phone-sized viewports.
+const WIDE_BREAKPOINT = 700;
+
+// react-native-web's Alert.alert is a no-op stub (confirmed: it renders
+// nothing and never invokes any button callback) — see TaskDetailScreen's
+// identical webAlert() helper and comment. Without this, any validation
+// failure or thrown error in handleSave() below is completely invisible on
+// web: the button click "does nothing" from the user's point of view, even
+// though a real problem (missing field, thrown exception) occurred.
+function webAlert(title: string, message?: string) {
+  if (Platform.OS === 'web') {
+    window.alert(message ? `${title}\n\n${message}` : title);
+  } else {
+    Alert.alert(title, message);
+  }
+}
 
 type Section = 'contact' | 'email' | 'website' | 'meeting_link' | 'location' | 'meeting' | 'travel';
 const OPTIONAL_SECTIONS: Array<{ key: Section; label: string; icon: string }> = [
@@ -32,6 +52,8 @@ export function NewEditTaskScreen() {
   const editingTaskId: string | undefined = route.params?.taskId;
   const presetCategory: string | undefined = route.params?.presetCategory;
   const isEdit = Boolean(editingTaskId);
+  const { width } = useWindowDimensions();
+  const isWide = width >= WIDE_BREAKPOINT;
 
   const categories = useLiveQuery('task_categories', listCategories);
 
@@ -44,6 +66,7 @@ export function NewEditTaskScreen() {
   const [remark, setRemark] = useState('');
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Set<Section>>(new Set());
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 
   // optional section fields
   const [contactName, setContactName] = useState('');
@@ -110,8 +133,8 @@ export function NewEditTaskScreen() {
   }
 
   async function handleSave() {
-    if (!title.trim()) return Alert.alert('Task name is required');
-    if (!categoryId) return Alert.alert('Please pick a category');
+    if (!title.trim()) return webAlert('Task name is required');
+    if (!categoryId) return webAlert('Please pick a category');
     setSaving(true);
     try {
       let taskId = editingTaskId!;
@@ -120,6 +143,7 @@ export function NewEditTaskScreen() {
           title,
           categoryId,
           priority,
+          assignedToName: assignedTo || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
         });
@@ -134,10 +158,35 @@ export function NewEditTaskScreen() {
           initialRemark: remark || null,
         });
         taskId = created.id;
+
+        // Attachments picked before the task existed (see AttachmentsSection
+        // "pending" mode below) — commit each to the newly-created task now.
+        for (const p of pendingAttachments) {
+          await addAttachment({
+            taskId,
+            fileType: p.fileType,
+            fileName: p.fileName,
+            localPath: p.localPath,
+            fileSizeBytes: p.fileSizeBytes ?? null,
+            mimeType: p.mimeType ?? null,
+            durationSeconds: p.durationSeconds ?? null,
+          });
+        }
       }
 
-      if (expanded.has('contact') && contactName.trim()) {
-        const contact = await createContact({ name: contactName, mobile: contactMobile || null, company: contactCompany || null });
+      // "Company" is now always visible on the main form (not gated behind
+      // "+ Contact" like Contact Name/Mobile still are), so a contact record
+      // is created whenever there's anything to save on it: an explicit
+      // Contact Name (from the optional section), or just a Company — in
+      // which case we fall back to "Assigned To" as the contact's name
+      // since that's who the company is associated with on this task.
+      const contactNameFinal = contactName.trim() || assignedTo.trim();
+      if (contactNameFinal || contactCompany.trim()) {
+        const contact = await createContact({
+          name: contactNameFinal || contactCompany.trim(),
+          mobile: contactMobile || null,
+          company: contactCompany || null,
+        });
         await linkContactToTask(taskId, contact.id);
       }
       if (expanded.has('email') && emailAddress.trim()) {
@@ -183,120 +232,234 @@ export function NewEditTaskScreen() {
 
       navigation.replace('TaskDetail', { taskId });
     } catch (e) {
-      Alert.alert('Could not save task', String((e as Error).message ?? e));
+      // Previously this failure was reported via Alert.alert, which is a
+      // no-op on web — so any exception here (a thrown error saving the
+      // task, committing a pending attachment, etc.) looked exactly like
+      // "Create Task does nothing" with zero feedback.
+      webAlert('Could not save task', String((e as Error).message ?? e));
     } finally {
       setSaving(false);
     }
   }
 
+  // Compact header action (desktop/tablet especially) so Create Task /
+  // Save Changes doesn't require scrolling to the bottom of a long form.
+  // The full-width button at the bottom of the form is left in place too —
+  // this is purely additive, same handleSave, same disabled/label logic.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ marginRight: spacing.md }}>
+          <SecondaryButton
+            label={saving ? 'Saving...' : isEdit ? 'Save' : 'Create Task'}
+            icon="checkmark-circle"
+            onPress={handleSave}
+          />
+        </View>
+      ),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, saving, isEdit, title, categoryId, priority, assignedTo, dueDate, reminderAt, remark, contactCompany, contactName, contactMobile, pendingAttachments]);
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-      <LabeledInput label="Task Name" required value={title} onChangeText={setTitle} placeholder="e.g. Client Payment Follow-up" />
+      <View style={styles.formShell}>
+        <Row isWide={isWide}>
+          <Field flex={1.4}>
+            <LabeledInput
+              label="Task Name"
+              required
+              icon="pricetag-outline"
+              accentColor={fieldAccents.title.color}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Client Payment Follow-up"
+            />
+          </Field>
+          <Field flex={1}>
+            <FieldLabel icon="flag-outline" color={fieldAccents.priority.color} text="Priority" />
+            <View style={styles.chipsWrap}>
+              {(['P1', 'P2', 'P3'] as Priority[]).map((p) => (
+                <Chip key={p} label={priorityMeta[p].label.split(' · ')[0]} selected={priority === p} color={priorityMeta[p].color} onPress={() => setPriority(p)} />
+              ))}
+            </View>
+          </Field>
+        </Row>
 
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.chipsWrap}>
-        {categories.data?.map((c) => (
-          <Chip key={c.id} label={c.name} selected={categoryId === c.id} color={c.color_hex} onPress={() => setCategoryId(c.id)} />
-        ))}
-      </View>
-
-      <Text style={styles.label}>Priority</Text>
-      <View style={styles.chipsWrap}>
-        {(['P1', 'P2', 'P3'] as Priority[]).map((p) => (
-          <Chip key={p} label={p} selected={priority === p} onPress={() => setPriority(p)} />
-        ))}
-      </View>
-
-      <LabeledInput label="Assigned To" value={assignedTo} onChangeText={setAssignedTo} placeholder="e.g. Rajni" />
-
-      <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" />
-      {canUseLocalNotifications ? (
-        <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" />
-      ) : isWeb && webNotificationsSupported ? (
-        <>
-          <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" />
-          <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
-        </>
-      ) : (
-        <Text style={styles.hint}>available in the phone app</Text>
-      )}
-
-      {!isEdit && (
-        <LabeledInput label="Remarks" value={remark} onChangeText={setRemark} placeholder="Add an initial note (optional)" multiline numberOfLines={3} style={{ minHeight: 80, textAlignVertical: 'top' }} />
-      )}
-
-      <Text style={styles.label}>Add more</Text>
-      <View style={styles.chipsWrap}>
-        {OPTIONAL_SECTIONS.map((s) => (
-          <Chip key={s.key} label={`+ ${s.label}`} selected={expanded.has(s.key)} onPress={() => toggleSection(s.key)} />
-        ))}
-      </View>
-
-      {expanded.has('contact') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Contact Name" value={contactName} onChangeText={setContactName} />
-          <LabeledInput label="Mobile Number" value={contactMobile} onChangeText={setContactMobile} keyboardType="phone-pad" />
-          <LabeledInput label="Company" value={contactCompany} onChangeText={setContactCompany} />
-        </View>
-      )}
-      {expanded.has('email') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Email Address" value={emailAddress} onChangeText={setEmailAddress} keyboardType="email-address" autoCapitalize="none" />
-          <LabeledInput label="Subject" value={emailSubject} onChangeText={setEmailSubject} />
-        </View>
-      )}
-      {expanded.has('website') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Website Link" value={website} onChangeText={setWebsite} autoCapitalize="none" placeholder="https://" />
-        </View>
-      )}
-      {expanded.has('meeting_link') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Meeting Link (Meet / Teams / Zoom)" value={meetingLinkUrl} onChangeText={setMeetingLinkUrl} autoCapitalize="none" />
-        </View>
-      )}
-      {expanded.has('location') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Location Label" value={locationLabel} onChangeText={setLocationLabel} placeholder="e.g. Client Office – Gurgaon" />
-          <LabeledInput label="Google Maps Link" value={mapsUrl} onChangeText={setMapsUrl} autoCapitalize="none" />
-        </View>
-      )}
-      {expanded.has('meeting') && (
-        <View style={styles.subSection}>
-          <LabeledInput label="Meeting Title" value={meetingTitle} onChangeText={setMeetingTitle} />
-          <DateTimeField label="Meeting Time" value={meetingStart} onChange={setMeetingStart} mode="datetime" />
-        </View>
-      )}
-      {expanded.has('travel') && (
-        <View style={styles.subSection}>
-          <Text style={styles.label}>City</Text>
+        <View style={styles.compactRow}>
+          <Text style={styles.label}>Category</Text>
           <View style={styles.chipsWrap}>
-            {CITY_OPTIONS.map((c) => (
-              <Chip key={c} label={c} selected={city === c} onPress={() => setCity(c)} />
+            {categories.data?.map((c) => (
+              <Chip key={c.id} label={c.name} selected={categoryId === c.id} color={c.color_hex} onPress={() => setCategoryId(c.id)} />
             ))}
           </View>
-          {city === 'Other' && <LabeledInput label="Enter City" value={customCity} onChangeText={setCustomCity} />}
-          <DateTimeField label="Travel Date" value={travelDate} onChange={setTravelDate} mode="date" />
-          <DateTimeField label="Return Date" value={returnDate} onChange={setReturnDate} mode="date" />
-          <LabeledInput label="Purpose" value={purpose} onChangeText={setPurpose} />
-          <LabeledInput label="Hotel" value={hotelName} onChangeText={setHotelName} />
         </View>
-      )}
 
-      {!isEdit && (
-        <Text style={styles.hint}>Photos, PDFs, audio recordings and video can be added once the task is saved — open it from the task list.</Text>
-      )}
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <LabeledInput
+              label="Assigned To"
+              icon="person-outline"
+              accentColor={fieldAccents.assignedTo.color}
+              value={assignedTo}
+              onChangeText={setAssignedTo}
+              placeholder="e.g. Rajni"
+            />
+          </Field>
+          <Field flex={1}>
+            <LabeledInput
+              label="Company"
+              icon="business-outline"
+              accentColor={fieldAccents.company.color}
+              value={contactCompany}
+              onChangeText={setContactCompany}
+              placeholder="e.g. Redcliffe Labs"
+            />
+          </Field>
+        </Row>
 
-      <PrimaryButton label={saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'} onPress={handleSave} disabled={saving} icon="checkmark" />
-      <View style={{ height: spacing.xxxl }} />
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
+          </Field>
+          <Field flex={1}>
+            {canUseLocalNotifications ? (
+              <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+            ) : isWeb && webNotificationsSupported ? (
+              <>
+                <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+                <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
+              </>
+            ) : (
+              <Text style={styles.hint}>available in the phone app</Text>
+            )}
+          </Field>
+        </Row>
+
+        {!isEdit && (
+          <LabeledInput
+            label="Remarks"
+            value={remark}
+            onChangeText={setRemark}
+            placeholder="Add an initial note (optional)"
+            multiline
+            numberOfLines={2}
+            style={{ minHeight: 76, textAlignVertical: 'top' }}
+          />
+        )}
+
+        <Text style={styles.label}>Add more</Text>
+        <View style={styles.chipsWrap}>
+          {OPTIONAL_SECTIONS.map((s) => (
+            <Chip key={s.key} label={`+ ${s.label}`} selected={expanded.has(s.key)} onPress={() => toggleSection(s.key)} />
+          ))}
+        </View>
+
+        {expanded.has('contact') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Contact Name" value={contactName} onChangeText={setContactName} placeholder="Optional — defaults to Assigned To" />
+            <LabeledInput label="Mobile Number" value={contactMobile} onChangeText={setContactMobile} keyboardType="phone-pad" />
+          </View>
+        )}
+        {expanded.has('email') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Email Address" value={emailAddress} onChangeText={setEmailAddress} keyboardType="email-address" autoCapitalize="none" />
+            <LabeledInput label="Subject" value={emailSubject} onChangeText={setEmailSubject} />
+          </View>
+        )}
+        {expanded.has('website') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Website Link" value={website} onChangeText={setWebsite} autoCapitalize="none" placeholder="https://" />
+          </View>
+        )}
+        {expanded.has('meeting_link') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Meeting Link (Meet / Teams / Zoom)" value={meetingLinkUrl} onChangeText={setMeetingLinkUrl} autoCapitalize="none" />
+          </View>
+        )}
+        {expanded.has('location') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Location Label" value={locationLabel} onChangeText={setLocationLabel} placeholder="e.g. Client Office – Gurgaon" />
+            <LabeledInput label="Google Maps Link" value={mapsUrl} onChangeText={setMapsUrl} autoCapitalize="none" />
+          </View>
+        )}
+        {expanded.has('meeting') && (
+          <View style={styles.subSection}>
+            <LabeledInput label="Meeting Title" value={meetingTitle} onChangeText={setMeetingTitle} />
+            <DateTimeField label="Meeting Time" value={meetingStart} onChange={setMeetingStart} mode="datetime" />
+          </View>
+        )}
+        {expanded.has('travel') && (
+          <View style={styles.subSection}>
+            <Text style={styles.label}>City</Text>
+            <View style={styles.chipsWrap}>
+              {CITY_OPTIONS.map((c) => (
+                <Chip key={c} label={c} selected={city === c} onPress={() => setCity(c)} />
+              ))}
+            </View>
+            {city === 'Other' && <LabeledInput label="Enter City" value={customCity} onChangeText={setCustomCity} />}
+            <DateTimeField label="Travel Date" value={travelDate} onChange={setTravelDate} mode="date" />
+            <DateTimeField label="Return Date" value={returnDate} onChange={setReturnDate} mode="date" />
+            <LabeledInput label="Purpose" value={purpose} onChangeText={setPurpose} />
+            <LabeledInput label="Hotel" value={hotelName} onChangeText={setHotelName} />
+          </View>
+        )}
+
+        {!isEdit && (
+          <AttachmentsSection
+            taskId={null}
+            attachments={[]}
+            pendingAttachments={pendingAttachments}
+            onPendingAttachmentsChange={setPendingAttachments}
+          />
+        )}
+
+        <PrimaryButton label={saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'} onPress={handleSave} disabled={saving} icon="checkmark" />
+        <View style={{ height: spacing.xxxl }} />
+      </View>
     </ScrollView>
   );
 }
 
+/** Two-column on wide viewports (desktop/tablet), stacked on narrow ones
+ * (phone) — the same component renders both; only the flex direction
+ * changes based on measured window width. This is the core building block
+ * for the compact grid (Task Name/Priority, Assigned To/Company, Due
+ * Date/Reminder). */
+function Row({ isWide, children }: { isWide: boolean; children: React.ReactNode }) {
+  return <View style={[styles.row, { flexDirection: isWide ? 'row' : 'column' }]}>{children}</View>;
+}
+
+/** Plain flex column wrapper for one field within a Row — no visual styling
+ * of its own. Each field's own component (LabeledInput/DateTimeField) now
+ * carries its own subtle accent (icon + tinted label + thin left border)
+ * directly, so this wrapper only needs to control width distribution. */
+function Field({ flex, children }: { flex: number; children: React.ReactNode }) {
+  return <View style={{ flex }}>{children}</View>;
+}
+
+/** Compact label row with a small colored icon — used for the Priority
+ * chips, which (unlike LabeledInput) don't have a built-in label. */
+function FieldLabel({ icon, color, text }: { icon: any; color?: string; text: string }) {
+  return (
+    <View style={styles.fieldLabelRow}>
+      {color ? <Ionicons name={icon} size={13} color={color} /> : null}
+      <Text style={[styles.label, color ? { color, marginBottom: 0 } : null]}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  content: { padding: spacing.lg, paddingBottom: spacing.xxxl },
+  // Centered, width-capped shell — a clean corporate-form width on desktop
+  // rather than fields stretching edge-to-edge across a wide window; on
+  // narrow viewports width is simply 100% since maxWidth never binds.
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl, alignItems: 'center' },
+  formShell: { width: '100%', maxWidth: 1040 },
+  row: { gap: spacing.md, marginBottom: spacing.md },
+  compactRow: { marginBottom: spacing.md },
   label: { ...typography.captionMedium, color: colors.textSecondary, marginBottom: spacing.xs },
-  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginBottom: spacing.lg },
-  subSection: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.border },
-  hint: { ...typography.caption, color: colors.textMuted, marginBottom: spacing.lg, fontStyle: 'italic' },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.xs },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  subSection: { backgroundColor: colors.surface, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  hint: { ...typography.caption, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.sm, fontStyle: 'italic' },
 });
