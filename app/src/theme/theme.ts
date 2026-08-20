@@ -110,6 +110,20 @@ export const statusMeta: Record<StatusKey, { label: string; color: string; soft:
   reassigned: { label: 'Reassigned', color: colors.categoryPersonal, soft: '#F1EDFE' },
 };
 
+// Subtle per-field-group accents for the New Task screen's compact layout
+// (New Task screen redesign). Purely additive — nothing above this reads or
+// depends on these keys, so no existing screen's look changes.
+export const fieldAccents = {
+  title: { color: colors.brand, soft: colors.brandSoft },
+  priority: { color: colors.warning, soft: colors.warningSoft },
+  assignedTo: { color: '#7A5AF8', soft: '#F1EDFE' },
+  company: { color: colors.success, soft: colors.successSoft },
+  dueDate: { color: '#4F46E5', soft: '#EEF2FF' },
+  reminder: { color: '#0D9488', soft: '#E6F6F5' },
+  remarks: { color: colors.textSecondary, soft: colors.bg },
+  attachments: { color: '#8B5CF6', soft: '#F5F0FF' },
+};
+
 export const categoryIconFallback: Record<string, string> = {
   Personal: 'person-circle-outline',
   Official: 'briefcase-outline',

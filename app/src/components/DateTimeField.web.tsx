@@ -11,6 +11,12 @@ interface Props {
   mode?: 'date' | 'time' | 'datetime';
   clearable?: boolean;
   placeholder?: string;
+  /** Optional subtle accent (New Task screen redesign) — tints the row's left
+   * border and background very lightly. Omit to render exactly as before
+   * (every other existing caller — Meeting Time, Travel Date, Return Date —
+   * doesn't pass this, so their appearance is unchanged). */
+  accentColor?: string;
+  accentSoft?: string;
 }
 
 /** Web-only counterpart to DateTimeField.tsx (Metro picks this file
@@ -28,7 +34,7 @@ interface Props {
  * the exact same styled row used on native, so the on-screen look is
  * unchanged but the row is now actually interactive — clicking/tapping it
  * opens the OS's real date/time picker UI. */
-export function DateTimeField({ label, value, onChange, mode = 'date', clearable = true, placeholder = 'Not set' }: Props) {
+export function DateTimeField({ label, value, onChange, mode = 'date', clearable = true, placeholder = 'Not set', accentColor, accentSoft }: Props) {
   const displayText = value
     ? mode === 'date'
       ? format(value, 'dd-MMM-yyyy')
@@ -62,13 +68,19 @@ export function DateTimeField({ label, value, onChange, mode = 'date', clearable
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.row}>
+      <View
+        style={[
+          styles.row,
+          accentColor ? { borderLeftWidth: 3, borderLeftColor: accentColor } : null,
+          accentSoft ? { backgroundColor: accentSoft } : null,
+        ]}
+      >
         {/* Invisible native input painted above the row's own children (it's
             declared last and is `position: absolute`, so it wins hit-testing
             over the static-flow icon/text below it) — this is what makes the
             whole row clickable. Its own visuals are irrelevant since
             opacity is 0. */}
-        <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
+        <Ionicons name="calendar-outline" size={18} color={accentColor ?? colors.textSecondary} />
         <Text style={[styles.value, !value && { color: colors.textMuted }]}>{displayText}</Text>
         {clearable && value ? (
           <View style={styles.clearWrap}>

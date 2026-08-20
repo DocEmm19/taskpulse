@@ -12,6 +12,11 @@ interface Props {
   mode?: 'date' | 'time' | 'datetime';
   clearable?: boolean;
   placeholder?: string;
+  /** Web-only visual accent (see DateTimeField.web.tsx) — accepted here only
+   * so callers type-check on native too; intentionally unused, native's look
+   * is unchanged. */
+  accentColor?: string;
+  accentSoft?: string;
 }
 
 /** Cross-platform date/time picker. Android shows its native dialog on demand;

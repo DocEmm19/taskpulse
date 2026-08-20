@@ -19,6 +19,21 @@ Copy this template for each new change:
 
 ---
 
+## [2026-08-20] New Task screen: web-alert fix + compact multi-color redesign
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), follow-up to PR #2 testing feedback
+- What:
+  - Investigated a report that Due Date, Reminder, and Create Task were all broken when testing PR #2 in a GitHub Codespace. Could not reproduce any of the three in this sandbox across dev server + a full production `expo export -p web` build (real clicks, DOM/pointer-event inspection, console/network monitoring, with and without a pending audio attachment) — `DateTimeField.web.tsx` is confirmed to be what's actually bundled (grepped the built JS for `datetime-local`/`toInputValue`; the old native picker's warning string is absent). Did find and fix one real, confirmed gap: `NewEditTaskScreen.tsx`'s `handleSave()` used `Alert.alert` for both its validation checks (missing title/category) and its catch-block — `Alert.alert` is a no-op stub on web (react-native-web renders nothing, calls no callback), so any silent validation failure or thrown error looked exactly like "Create Task does nothing." Now uses the same `window.alert`-based `webAlert()` pattern already established in `TaskDetailScreen.tsx`.
+  - Redesigned the New Task screen's layout per new requirements: compact two-column grid on wide/desktop viewports (Title+Priority, Assigned To+Company, Due Date+Reminder rows), single-column stacking on mobile, a subtle limited color accent per field group (blue/amber/purple/green/indigo/teal/neutral), and a compact header-right "Create Task"/"Save" button so it's reachable without scrolling. Promoted "Company" from the hidden "+ Contact" section to an always-visible field next to Assigned To; the contact-linking save logic now creates/links a contact whenever Contact Name or Company is filled (falling back to Assigned To as the contact's name if only Company is given), instead of requiring the "+ Contact" section to be expanded.
+  - Attachments, Assigned To persistence, and Create Task's core save flow were left untouched (no logic changes beyond the contact-linking condition above).
+- Why: reported bugs needed root-causing (not just re-assumed-fixed), and the New Task screen needed a more compact, professional, color-differentiated layout without touching working functionality.
+- Files touched: app/src/screens/NewEditTaskScreen.tsx, app/src/components/DateTimeField.web.tsx (added optional accentColor/accentSoft props, backward-compatible), app/src/components/DateTimeField.tsx (added the same optional props to the type only, for cross-platform type-checking — native rendering unchanged), app/src/theme/theme.ts (added `fieldAccents`, additive only)
+- Tested: tsc pass · npm test pass (85) · Playwright against a freshly restarted dev server at both 1280px (desktop) and 390px (mobile) widths — Due Date and Reminder both real-click-focusable and fillable, Create Task succeeds with no attachment, with a pending recorded-audio attachment, and with Assigned To + Company (verified the resulting task's Contact section shows the right name/company), zero console errors in any run
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: the Due Date/Reminder/Create-Task Codespace reports could not be reproduced here — if they persist after this update, the most useful next diagnostic would be actual browser console output from the Codespace session, or confirmation of a hard refresh / service-worker cache clear.
+
+---
+
 ## [2026-08-20] Fix New Task screen: attachments, Assigned To, Due Date
 - Branch: fix/new-task-date-time-attachments
 - Who: Claude (for Abhay), per bug report from testing the New Task screen
