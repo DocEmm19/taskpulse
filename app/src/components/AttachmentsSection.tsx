@@ -19,12 +19,27 @@ import { Attachment, AttachmentType } from '../types/models';
 import { addAttachment, deleteAttachment, renameAttachment } from '../db/repositories/attachments';
 import { canUseCamera, canRecordAudio, isWeb } from '../lib/platform';
 import { startWebRecording, webRecordingSupported, WebRecordingHandle } from '../lib/webAudioRecorder';
+import { newId } from '../lib/uuid';
+import { PendingAttachment, pendingToAttachment } from '../lib/pendingAttachments';
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { SectionCard } from './Common';
 
+// Re-exported so existing imports (`from '../components/AttachmentsSection'`)
+// keep working — the type/helper themselves live in lib/pendingAttachments.ts
+// so they can be unit-tested without pulling in this file's native deps
+// (expo-audio/expo-video/expo-image-picker, which fail to load under Jest).
+export type { PendingAttachment };
+export { pendingToAttachment };
+
 interface Props {
-  taskId: string;
+  /** null = "pending" mode: no task exists yet, so picked files are held in
+   * `pendingAttachments`/`onPendingAttachmentsChange` instead of being
+   * written to the DB immediately. Existing callers (TaskDetailScreen)
+   * always pass a real id and are unaffected. */
+  taskId: string | null;
   attachments: Attachment[];
+  pendingAttachments?: PendingAttachment[];
+  onPendingAttachmentsChange?: (updater: (prev: PendingAttachment[]) => PendingAttachment[]) => void;
 }
 
 const ICONS: Record<AttachmentType, any> = { image: 'image-outline', pdf: 'document-text-outline', audio: 'mic-outline', video: 'videocam-outline' };
@@ -36,12 +51,37 @@ async function shareFile(att: Attachment) {
   await Sharing.shareAsync(att.local_path);
 }
 
-export function AttachmentsSection({ taskId, attachments }: Props) {
+export function AttachmentsSection({ taskId, attachments, pendingAttachments, onPendingAttachmentsChange }: Props) {
   const [preview, setPreview] = useState<Attachment | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
   const [activeAudioUri, setActiveAudioUri] = useState<string | null>(null);
+
+  /** Writes straight to the DB when a task already exists (unchanged
+   * behavior); otherwise stashes the file in local/parent state until the
+   * task is created (New Task screen — see PendingAttachment above). */
+  async function addOrQueueAttachment(data: {
+    fileType: AttachmentType;
+    fileName: string;
+    localPath: string;
+    fileSizeBytes?: number | null;
+    mimeType?: string | null;
+    durationSeconds?: number | null;
+  }) {
+    if (taskId) {
+      await addAttachment({ taskId, ...data });
+    } else {
+      onPendingAttachmentsChange?.((prev) => [...prev, { localId: newId(), ...data }]);
+    }
+  }
+
+  const pendingIds = new Set((pendingAttachments ?? []).map((p) => p.localId));
+
+  const displayAttachments: Attachment[] = [
+    ...(pendingAttachments ?? []).map((p) => pendingToAttachment(p, taskId)),
+    ...attachments,
+  ];
 
   // ---- Recording (expo-audio, hook-based) ----
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -61,7 +101,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
     const uri = recorder.uri;
     if (!uri) return;
     const localPath = await persistLocalFile(uri, 'm4a');
-    await addAttachment({ taskId, fileType: 'audio', fileName: `voice_note_${Date.now()}.m4a`, localPath, durationSeconds: seconds, mimeType: 'audio/m4a' });
+    await addOrQueueAttachment({ fileType: 'audio', fileName: `voice_note_${Date.now()}.m4a`, localPath, durationSeconds: seconds, mimeType: 'audio/m4a' });
   }
 
   // ---- Recording (web, MediaRecorder-based) ----
@@ -86,7 +126,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
       const { uri, mimeType, fileName } = await webRecording.stop();
       const extension = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
       const localPath = await persistLocalFile(uri, extension);
-      await addAttachment({ taskId, fileType: 'audio', fileName, localPath, mimeType });
+      await addOrQueueAttachment({ fileType: 'audio', fileName, localPath, mimeType });
     } catch (err) {
       Alert.alert('Recording failed', err instanceof Error ? err.message : undefined);
     }
@@ -126,7 +166,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
     if (result.canceled) return;
     for (const asset of result.assets) {
       const localPath = await persistLocalFile(asset.uri, 'jpg');
-      await addAttachment({ taskId, fileType: 'image', fileName: asset.fileName ?? `photo_${Date.now()}.jpg`, localPath, fileSizeBytes: asset.fileSize ?? null, mimeType: 'image/jpeg' });
+      await addOrQueueAttachment({ fileType: 'image', fileName: asset.fileName ?? `photo_${Date.now()}.jpg`, localPath, fileSizeBytes: asset.fileSize ?? null, mimeType: 'image/jpeg' });
     }
   }
 
@@ -135,7 +175,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
     if (result.canceled) return;
     for (const asset of result.assets) {
       const localPath = await persistLocalFile(asset.uri, 'pdf');
-      await addAttachment({ taskId, fileType: 'pdf', fileName: asset.name, localPath, fileSizeBytes: asset.size ?? null, mimeType: 'application/pdf' });
+      await addOrQueueAttachment({ fileType: 'pdf', fileName: asset.name, localPath, fileSizeBytes: asset.size ?? null, mimeType: 'application/pdf' });
     }
   }
 
@@ -146,7 +186,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
     if (result.canceled) return;
     const asset = result.assets[0];
     const localPath = await persistLocalFile(asset.uri, 'mp4');
-    await addAttachment({ taskId, fileType: 'video', fileName: asset.fileName ?? `video_${Date.now()}.mp4`, localPath, fileSizeBytes: asset.fileSize ?? null, durationSeconds: asset.duration ? Math.round(asset.duration / 1000) : null, mimeType: 'video/mp4' });
+    await addOrQueueAttachment({ fileType: 'video', fileName: asset.fileName ?? `video_${Date.now()}.mp4`, localPath, fileSizeBytes: asset.fileSize ?? null, durationSeconds: asset.duration ? Math.round(asset.duration / 1000) : null, mimeType: 'video/mp4' });
   }
 
   async function recordVideo() {
@@ -156,18 +196,33 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
     if (result.canceled) return;
     const asset = result.assets[0];
     const localPath = await persistLocalFile(asset.uri, 'mp4');
-    await addAttachment({ taskId, fileType: 'video', fileName: `video_${Date.now()}.mp4`, localPath, durationSeconds: asset.duration ? Math.round(asset.duration / 1000) : null, mimeType: 'video/mp4' });
+    await addOrQueueAttachment({ fileType: 'video', fileName: `video_${Date.now()}.mp4`, localPath, durationSeconds: asset.duration ? Math.round(asset.duration / 1000) : null, mimeType: 'video/mp4' });
   }
 
   function confirmDelete(att: Attachment) {
+    const isPending = pendingIds.has(att.id);
     Alert.alert('Delete attachment', `Delete "${att.file_name}"?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteAttachment(att.id) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          if (isPending) onPendingAttachmentsChange?.((prev) => prev.filter((p) => p.localId !== att.id));
+          else deleteAttachment(att.id);
+        },
+      },
     ]);
   }
 
   function submitRename() {
-    if (renamingId && renameText.trim()) renameAttachment(renamingId, renameText.trim());
+    if (renamingId && renameText.trim()) {
+      if (pendingIds.has(renamingId)) {
+        const finalName = renameText.trim();
+        onPendingAttachmentsChange?.((prev) => prev.map((p) => (p.localId === renamingId ? { ...p, fileName: finalName } : p)));
+      } else {
+        renameAttachment(renamingId, renameText.trim());
+      }
+    }
     setRenamingId(null);
   }
 
@@ -192,12 +247,13 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
 
       {(!canUseCamera || !canRecordAudio) && <Text style={styles.empty}>available in the phone app</Text>}
 
-      {attachments.length === 0 ? (
+      {displayAttachments.length === 0 ? (
         <Text style={styles.empty}>No attachments yet. Add a photo, PDF, voice note, or video above.</Text>
       ) : (
         <View style={{ gap: spacing.sm }}>
-          {attachments.map((att) => {
+          {displayAttachments.map((att) => {
             const isPlayingThis = activeAudioId === att.id && playerStatus.playing;
+            const isPending = pendingIds.has(att.id);
             return (
               <View key={att.id} style={styles.attachmentRow}>
                 <Pressable
@@ -216,7 +272,7 @@ export function AttachmentsSection({ taskId, attachments }: Props) {
                       <Text style={styles.attachmentName} numberOfLines={1}>{att.file_name}</Text>
                       <Text style={styles.attachmentMeta}>
                         {att.duration_seconds ? `${att.duration_seconds}s · ` : ''}
-                        {att.sync_status === 'synced' ? 'Synced' : 'Stored on device'}
+                        {isPending ? 'Will be added when you save' : att.sync_status === 'synced' ? 'Synced' : 'Stored on device'}
                       </Text>
                     </View>
                   )}

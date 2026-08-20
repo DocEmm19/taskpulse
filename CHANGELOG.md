@@ -19,6 +19,21 @@ Copy this template for each new change:
 
 ---
 
+## [2026-08-20] Fix New Task screen: attachments, Assigned To, Due Date
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), per bug report from testing the New Task screen
+- What:
+  - Attachments (Gallery/Photo, PDF, Record Audio, Video File) can now be picked on the New Task screen itself, reusing the exact same picker components/logic as the Task Detail screen. Since attachments require a saved task id in the DB, picked files are held locally ("pending") and committed to the task the moment it's created.
+  - Due Date / Reminder / any date-time field was completely non-functional on web: `@react-native-community/datetimepicker` has no web implementation (its fallback just renders nothing and console.warns), and `DateTimeField.tsx`'s picker markup was only rendered when `Platform.OS === 'ios'`, so tapping the field silently did nothing on web. Added `DateTimeField.web.tsx` (Metro's platform-extension resolution) using the browser's native date/time input, invisibly overlaid on the same-looking row — native iOS/Android untouched.
+  - Assigned To: typing/saving on task creation already worked; fixed a related bug where editing an existing task's Assigned To value was silently dropped because `TaskPatch`/`updateTask` never accepted an `assignedToName` field.
+- Why: reported as broken/unclickable in manual testing of the New Task screen; verified root causes via headless + mobile-emulated browser testing against both the dev server and a production `expo export -p web` build.
+- Files touched: app/src/components/DateTimeField.web.tsx (new), app/src/lib/pendingAttachments.ts (new), app/src/components/AttachmentsSection.tsx, app/src/screens/NewEditTaskScreen.tsx, app/src/db/repositories/tasks.ts, plus new tests under app/src/components/__tests__/ and app/src/db/__tests__/updateTaskAssignedTo.test.ts
+- Tested: tsc pass · npm test pass (85) · build:web pass · manually verified via Playwright against both `expo start --web` and a production `expo export -p web` build (Due Date, Assigned To, and a picked PDF all persisted correctly to a newly created task)
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: none — native iOS/Android DateTimeField and the Task Detail attachments flow are unchanged.
+
+---
+
 ## [2026-08-17] v1 baseline (starting point — do not edit, for reference)
 - Branch: main
 - Who: Piyush (build) — handed to Gaurav

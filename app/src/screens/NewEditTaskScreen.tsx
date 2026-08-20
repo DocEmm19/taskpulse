@@ -3,9 +3,11 @@ import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Chip, LabeledInput, PrimaryButton, SecondaryButton } from '../components/Common';
 import { DateTimeField } from '../components/DateTimeField';
+import { AttachmentsSection, PendingAttachment } from '../components/AttachmentsSection';
 import { useLiveQuery } from '../db/useLiveQuery';
 import { listCategories } from '../db/repositories/categories';
 import { createTask, updateTask } from '../db/repositories/tasks';
+import { addAttachment } from '../db/repositories/attachments';
 import { getTaskFull } from '../db/repositories/taskFull';
 import { createContact, linkContactToTask } from '../db/repositories/contacts';
 import { addTaskEmail, addTaskLink, setTaskLocation, setTaskMeeting, setTravelPlan, addReminder } from '../db/repositories/taskExtras';
@@ -44,6 +46,7 @@ export function NewEditTaskScreen() {
   const [remark, setRemark] = useState('');
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState<Set<Section>>(new Set());
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
 
   // optional section fields
   const [contactName, setContactName] = useState('');
@@ -120,6 +123,7 @@ export function NewEditTaskScreen() {
           title,
           categoryId,
           priority,
+          assignedToName: assignedTo || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
         });
@@ -134,6 +138,20 @@ export function NewEditTaskScreen() {
           initialRemark: remark || null,
         });
         taskId = created.id;
+
+        // Attachments picked before the task existed (see AttachmentsSection
+        // "pending" mode below) — commit each to the newly-created task now.
+        for (const p of pendingAttachments) {
+          await addAttachment({
+            taskId,
+            fileType: p.fileType,
+            fileName: p.fileName,
+            localPath: p.localPath,
+            fileSizeBytes: p.fileSizeBytes ?? null,
+            mimeType: p.mimeType ?? null,
+            durationSeconds: p.durationSeconds ?? null,
+          });
+        }
       }
 
       if (expanded.has('contact') && contactName.trim()) {
@@ -284,7 +302,12 @@ export function NewEditTaskScreen() {
       )}
 
       {!isEdit && (
-        <Text style={styles.hint}>Photos, PDFs, audio recordings and video can be added once the task is saved — open it from the task list.</Text>
+        <AttachmentsSection
+          taskId={null}
+          attachments={[]}
+          pendingAttachments={pendingAttachments}
+          onPendingAttachmentsChange={setPendingAttachments}
+        />
       )}
 
       <PrimaryButton label={saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Task'} onPress={handleSave} disabled={saving} icon="checkmark" />

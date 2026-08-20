@@ -78,6 +78,7 @@ export interface TaskPatch {
   categoryId?: string;
   priority?: Priority;
   status?: TaskStatus;
+  assignedToName?: string | null;
   dueDate?: string | null;
   reminderAt?: string | null;
   isStarred?: boolean;
@@ -124,6 +125,11 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
       params.push(now);
     }
   }
+  if (patch.assignedToName !== undefined && patch.assignedToName !== before.assigned_to_name) {
+    sets.push('assigned_to_name = ?');
+    params.push(patch.assignedToName);
+    activityLines.push(patch.assignedToName ? `Assigned to ${patch.assignedToName}` : 'Assignee removed');
+  }
   if (patch.dueDate !== undefined && patch.dueDate !== before.due_date) {
     sets.push('due_date = ?');
     params.push(patch.dueDate);
@@ -158,6 +164,8 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
       ? 'due_date_changed'
       : line.startsWith('Reminder')
       ? 'reminder_set'
+      : line.startsWith('Assigned to') || line === 'Assignee removed'
+      ? 'assigned'
       : 'status_changed';
     await logActivity(id, eventType as any, line);
   }
