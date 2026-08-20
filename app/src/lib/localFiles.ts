@@ -26,12 +26,23 @@ async function persistLocalFileWeb(sourceUri: string): Promise<string> {
   if (sourceUri.startsWith('data:')) return sourceUri;
   const response = await fetch(sourceUri);
   const blob = await response.blob();
-  return await new Promise<string>((resolve, reject) => {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read attachment data'));
     reader.readAsDataURL(blob);
   });
+  // `sourceUri` here is a blob: object URL (e.g. from the web audio
+  // recorder or a file picker) — once its bytes are safely read into the
+  // plain data: string above, the original object URL reference is no
+  // longer needed. Revoking it releases the browser's in-memory Blob
+  // registry entry instead of leaking it for the rest of the tab's
+  // lifetime, which matters most for audio recordings made (and possibly
+  // re-recorded/discarded) on the New Task screen before the task is saved.
+  if (sourceUri.startsWith('blob:')) {
+    URL.revokeObjectURL(sourceUri);
+  }
+  return dataUrl;
 }
 
 /** Copies a picker/recorder result (which usually lives in a temp cache dir)

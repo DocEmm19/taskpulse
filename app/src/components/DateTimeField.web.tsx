@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useRef } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { colors, radius, spacing, typography } from '../theme/theme';
@@ -33,8 +33,37 @@ interface Props {
  * date/time input, kept visually invisible (opacity 0) and stretched over
  * the exact same styled row used on native, so the on-screen look is
  * unchanged but the row is now actually interactive — clicking/tapping it
- * opens the OS's real date/time picker UI. */
+ * opens the OS's real date/time picker UI.
+ *
+ * The invisible overlay <input> above is normally enough on its own (a
+ * click landing on it is a native click on a real date/datetime-local
+ * input, which browsers open a picker for by default). As a second,
+ * independent trigger — for any environment where that default click-to-open
+ * behavior doesn't fire (older WebKit, some embedded/webview browsers) — the
+ * icon+text area is also wrapped in a Pressable that explicitly focuses the
+ * same input and calls its `showPicker()` API. Both paths drive the exact
+ * same <input>, so they can never disagree; the second path is a no-op extra
+ * safety net where the first already works. */
 export function DateTimeField({ label, value, onChange, mode = 'date', clearable = true, placeholder = 'Not set', accentColor, accentSoft }: Props) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  function openPicker() {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    // showPicker() (Chrome/Edge 99+) explicitly opens the native picker on
+    // user interaction; unsupported browsers (Firefox, Safari as of this
+    // writing) simply don't have the method, and some browsers only allow
+    // calling it directly inside a user-gesture handler (which this is) —
+    // wrapped defensively since neither condition should ever throw here.
+    try {
+      (el as unknown as { showPicker?: () => void }).showPicker?.();
+    } catch {
+      // Ignore — the input is already focused, which is enough for the
+      // browser's own UI (or a subsequent native click) to take over.
+    }
+  }
+
   const displayText = value
     ? mode === 'date'
       ? format(value, 'dd-MMM-yyyy')
@@ -75,25 +104,30 @@ export function DateTimeField({ label, value, onChange, mode = 'date', clearable
           accentSoft ? { backgroundColor: accentSoft } : null,
         ]}
       >
-        {/* Invisible native input painted above the row's own children (it's
-            declared last and is `position: absolute`, so it wins hit-testing
-            over the static-flow icon/text below it) — this is what makes the
-            whole row clickable. Its own visuals are irrelevant since
-            opacity is 0. */}
-        <Ionicons name="calendar-outline" size={18} color={accentColor ?? colors.textSecondary} />
-        <Text style={[styles.value, !value && { color: colors.textMuted }]}>{displayText}</Text>
+        <Pressable onPress={openPicker} style={styles.hitArea}>
+          {/* Invisible native input painted above the icon/text (it's
+              declared last and is `position: absolute`, so it wins
+              hit-testing over the static-flow content below it) — a direct
+              click on it is a real click on a real date input, which is
+              what makes the row clickable in the first place. The
+              surrounding Pressable's onPress (openPicker, above) is a
+              second, independent way to open the same input's picker. */}
+          <Ionicons name="calendar-outline" size={18} color={accentColor ?? colors.textSecondary} />
+          <Text style={[styles.value, !value && { color: colors.textMuted }]}>{displayText}</Text>
+          <input
+            ref={inputRef}
+            type={inputType}
+            value={toInputValue(value, mode)}
+            onChange={handleNativeChange}
+            aria-label={label}
+            style={webOverlayStyle}
+          />
+        </Pressable>
         {clearable && value ? (
           <View style={styles.clearWrap}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} onPress={() => onChange(null)} />
           </View>
         ) : null}
-        <input
-          type={inputType}
-          value={toInputValue(value, mode)}
-          onChange={handleNativeChange}
-          aria-label={label}
-          style={webOverlayStyle}
-        />
       </View>
     </View>
   );
@@ -150,8 +184,9 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   value: { ...typography.body, color: colors.textPrimary, flex: 1 },
-  // Its own stacking context with a higher z-index than the overlay input
-  // above, so the "clear" (x) icon stays clickable instead of the tap being
-  // swallowed by the invisible date input that covers the rest of the row.
-  clearWrap: { position: 'relative', zIndex: 2 },
+  // Scoped to just the icon+text area (excludes the clear button) so the
+  // absolutely-positioned overlay <input> inside it never covers the clear
+  // button — no z-index race needed between them.
+  hitArea: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, position: 'relative' },
+  clearWrap: { position: 'relative' },
 });

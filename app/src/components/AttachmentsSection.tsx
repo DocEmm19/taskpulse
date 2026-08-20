@@ -201,16 +201,29 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
 
   function confirmDelete(att: Attachment) {
     const isPending = pendingIds.has(att.id);
-    Alert.alert('Delete attachment', `Delete "${att.file_name}"?`, [
+    const message = `Delete "${att.file_name}"?`;
+
+    function performDelete() {
+      // Filters by this specific attachment's id only — every other pending
+      // or already-saved attachment in the list is untouched.
+      if (isPending) onPendingAttachmentsChange?.((prev) => prev.filter((p) => p.localId !== att.id));
+      else deleteAttachment(att.id);
+    }
+
+    if (isWeb) {
+      // Root cause of "delete does nothing" on web: Alert.alert's
+      // [Cancel, Delete] button array (below) is a no-op stub under
+      // react-native-web — it renders nothing and never invokes either
+      // button's onPress, so `performDelete` was never reachable. window.confirm
+      // is the standard browser equivalent, matching the same pattern already
+      // used for task deletion in TaskDetailScreen's handleDelete.
+      if (window.confirm(message)) performDelete();
+      return;
+    }
+
+    Alert.alert('Delete attachment', message, [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          if (isPending) onPendingAttachmentsChange?.((prev) => prev.filter((p) => p.localId !== att.id));
-          else deleteAttachment(att.id);
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: performDelete },
     ]);
   }
 
