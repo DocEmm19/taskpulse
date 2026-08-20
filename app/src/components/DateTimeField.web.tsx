@@ -67,7 +67,7 @@ export function DateTimeField({ label, value, onChange, mode = 'date', clearable
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, accentColor ? { color: accentColor } : null]}>{label}</Text>
       <View
         style={[
           styles.row,
@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
     backgroundColor: colors.surface,

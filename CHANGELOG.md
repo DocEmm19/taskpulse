@@ -19,6 +19,18 @@ Copy this template for each new change:
 
 ---
 
+## [2026-08-20] New Task screen: compact corporate-style layout refinement
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Abhay), follow-up refinement to the previous redesign
+- What: Second visual pass on the same screen — the prior redesign's large pastel field-group cards read as too big/consumer-colorful, so replaced them with a "Microsoft 365 / Linear"-style compact corporate look: white input backgrounds, thin gray borders, a subtle 3px colored left-border + small icon + tinted label per field (Task/Due Date = blue, Priority = amber, Assigned To = purple, Company = green, Reminder = teal; Category/Remarks/Add More/Attachments stay neutral), 6-10px corner radii, and tighter vertical spacing. Same 2-column desktop grid (Task+Priority, Assigned To+Company, Due Date+Reminder), single column on mobile — one component for both, no separate mobile screen. Content is now width-capped at ~1040px and centered on desktop instead of stretching edge to edge. Attachments' action buttons now wrap onto multiple rows (compact ~80x64 each) instead of a horizontal scroll strip, so nothing scrolls sideways at any width. `LabeledInput` (shared component) gained optional `icon`/`accentColor` props — both undefined by default, so every other existing screen using it renders pixel-identical to before.
+- Why: requested as a follow-up refinement — same functionality, more restrained/professional visual design, fully responsive with zero horizontal scrolling from 360px through 1440px+.
+- Files touched: app/src/screens/NewEditTaskScreen.tsx, app/src/components/Common.tsx (LabeledInput: additive icon/accentColor props), app/src/components/DateTimeField.web.tsx (label tinting, radius), app/src/components/AttachmentsSection.tsx (action row: horizontal-scroll → wrapping grid, style-only), app/src/theme/theme.ts (fieldAccents trimmed to the six accented fields)
+- Tested: tsc pass · npm test pass (85) · Playwright at 1280px, 1440px, 360px, 390px, 430px — zero horizontal overflow at every width, Due Date/Reminder both real-click-focusable and fillable, Create Task succeeds (with no attachment, with a pending recorded-audio attachment), Assigned To + Company persist and correctly link a Contact, zero console errors in any run
+- Status: testing on this branch, not yet merged to main
+- Notes / issues for Piyush: no business/database logic touched — this and the entry below are UI-only passes on the same screen.
+
+---
+
 ## [2026-08-20] New Task screen: web-alert fix + compact multi-color redesign
 - Branch: fix/new-task-date-time-attachments
 - Who: Claude (for Abhay), follow-up to PR #2 testing feedback

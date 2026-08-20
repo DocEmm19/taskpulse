@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -231,7 +231,7 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
 
   return (
     <SectionCard title="Attachments" icon="attach-outline">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsRow}>
+      <View style={styles.actionsRow}>
         {canUseCamera && <ActionButton icon="camera-outline" label="Photo" onPress={() => pickImage(true)} />}
         <ActionButton icon="images-outline" label="Gallery" onPress={() => pickImage(false)} />
         <ActionButton icon="document-attach-outline" label="PDF" onPress={pickPdf} />
@@ -243,7 +243,7 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
         )}
         {canUseCamera && <ActionButton icon="videocam-outline" label="Record Video" onPress={recordVideo} />}
         <ActionButton icon="film-outline" label="Video File" onPress={pickVideo} />
-      </ScrollView>
+      </View>
 
       {(!canUseCamera || !canRecordAudio) && <Text style={styles.empty}>available in the phone app</Text>}
 
@@ -327,8 +327,8 @@ function ActionButton({ icon, label, onPress, danger }: { icon: any; label: stri
 }
 
 const styles = StyleSheet.create({
-  actionsRow: { gap: spacing.sm, paddingBottom: spacing.md },
-  actionButton: { alignItems: 'center', gap: 4, backgroundColor: colors.brandSoft, padding: spacing.sm, borderRadius: radius.md, width: 76 },
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingBottom: spacing.sm },
+  actionButton: { alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: colors.brandSoft, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, borderRadius: radius.sm, width: 80, minHeight: 64 },
   actionLabel: { ...typography.tiny, color: colors.brand, textAlign: 'center' },
   empty: { ...typography.caption, color: colors.textMuted, fontStyle: 'italic', paddingVertical: spacing.sm },
   attachmentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.xs, borderBottomWidth: 1, borderBottomColor: colors.border },

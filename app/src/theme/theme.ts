@@ -118,10 +118,8 @@ export const fieldAccents = {
   priority: { color: colors.warning, soft: colors.warningSoft },
   assignedTo: { color: '#7A5AF8', soft: '#F1EDFE' },
   company: { color: colors.success, soft: colors.successSoft },
-  dueDate: { color: '#4F46E5', soft: '#EEF2FF' },
+  dueDate: { color: colors.brand, soft: colors.brandSoft },
   reminder: { color: '#0D9488', soft: '#E6F6F5' },
-  remarks: { color: colors.textSecondary, soft: colors.bg },
-  attachments: { color: '#8B5CF6', soft: '#F5F0FF' },
 };
 
 export const categoryIconFallback: Record<string, string> = {

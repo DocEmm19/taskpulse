@@ -265,11 +265,19 @@ export function NewEditTaskScreen() {
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.formShell}>
         <Row isWide={isWide}>
-          <Field flex={1.4} accent={fieldAccents.title} icon="pricetag-outline" accentLabel="Task">
-            <LabeledInput label="Task Name" required value={title} onChangeText={setTitle} placeholder="e.g. Client Payment Follow-up" style={accentedInput(fieldAccents.title)} />
+          <Field flex={1.4}>
+            <LabeledInput
+              label="Task Name"
+              required
+              icon="pricetag-outline"
+              accentColor={fieldAccents.title.color}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Client Payment Follow-up"
+            />
           </Field>
-          <Field flex={1} accent={fieldAccents.priority} icon="flag-outline" accentLabel="Priority">
-            <Text style={styles.label}>Priority</Text>
+          <Field flex={1}>
+            <FieldLabel icon="flag-outline" color={fieldAccents.priority.color} text="Priority" />
             <View style={styles.chipsWrap}>
               {(['P1', 'P2', 'P3'] as Priority[]).map((p) => (
                 <Chip key={p} label={priorityMeta[p].label.split(' · ')[0]} selected={priority === p} color={priorityMeta[p].color} onPress={() => setPriority(p)} />
@@ -288,24 +296,38 @@ export function NewEditTaskScreen() {
         </View>
 
         <Row isWide={isWide}>
-          <Field flex={1} accent={fieldAccents.assignedTo} icon="person-outline" accentLabel="Assigned To">
-            <LabeledInput label="Assigned To" value={assignedTo} onChangeText={setAssignedTo} placeholder="e.g. Rajni" style={accentedInput(fieldAccents.assignedTo)} />
+          <Field flex={1}>
+            <LabeledInput
+              label="Assigned To"
+              icon="person-outline"
+              accentColor={fieldAccents.assignedTo.color}
+              value={assignedTo}
+              onChangeText={setAssignedTo}
+              placeholder="e.g. Rajni"
+            />
           </Field>
-          <Field flex={1} accent={fieldAccents.company} icon="business-outline" accentLabel="Company">
-            <LabeledInput label="Company" value={contactCompany} onChangeText={setContactCompany} placeholder="e.g. Redcliffe Labs" style={accentedInput(fieldAccents.company)} />
+          <Field flex={1}>
+            <LabeledInput
+              label="Company"
+              icon="business-outline"
+              accentColor={fieldAccents.company.color}
+              value={contactCompany}
+              onChangeText={setContactCompany}
+              placeholder="e.g. Redcliffe Labs"
+            />
           </Field>
         </Row>
 
         <Row isWide={isWide}>
-          <Field flex={1} accent={fieldAccents.dueDate} icon="calendar-outline" accentLabel="Due Date">
-            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} accentSoft={fieldAccents.dueDate.soft} />
+          <Field flex={1}>
+            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
           </Field>
-          <Field flex={1} accent={fieldAccents.reminder} icon="notifications-outline" accentLabel="Reminder">
+          <Field flex={1}>
             {canUseLocalNotifications ? (
-              <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} accentSoft={fieldAccents.reminder.soft} />
+              <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
             ) : isWeb && webNotificationsSupported ? (
               <>
-                <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} accentSoft={fieldAccents.reminder.soft} />
+                <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
                 <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
               </>
             ) : (
@@ -315,9 +337,15 @@ export function NewEditTaskScreen() {
         </Row>
 
         {!isEdit && (
-          <Field flex={1} accent={fieldAccents.remarks} icon="chatbox-ellipses-outline" accentLabel="Remarks" style={{ marginBottom: spacing.md }}>
-            <LabeledInput label="Remarks" value={remark} onChangeText={setRemark} placeholder="Add an initial note (optional)" multiline numberOfLines={2} style={[accentedInput(fieldAccents.remarks), { minHeight: 64, textAlignVertical: 'top' }]} />
-          </Field>
+          <LabeledInput
+            label="Remarks"
+            value={remark}
+            onChangeText={setRemark}
+            placeholder="Add an initial note (optional)"
+            multiline
+            numberOfLines={2}
+            style={{ minHeight: 76, textAlignVertical: 'top' }}
+          />
         )}
 
         <Text style={styles.label}>Add more</Text>
@@ -393,64 +421,45 @@ export function NewEditTaskScreen() {
   );
 }
 
-/** Two-column on wide viewports, stacked on narrow ones — the core building
- * block for the compact desktop grid (Title/Priority, Assigned To/Company,
- * Due Date/Reminder). */
+/** Two-column on wide viewports (desktop/tablet), stacked on narrow ones
+ * (phone) — the same component renders both; only the flex direction
+ * changes based on measured window width. This is the core building block
+ * for the compact grid (Task Name/Priority, Assigned To/Company, Due
+ * Date/Reminder). */
 function Row({ isWide, children }: { isWide: boolean; children: React.ReactNode }) {
   return <View style={[styles.row, { flexDirection: isWide ? 'row' : 'column' }]}>{children}</View>;
 }
 
-/** Wraps a single field with its subtle colored accent — a thin left border
- * + very light tinted background, kept restrained per field-group (title
- * blue, priority amber, assigned-to purple, company green, due-date indigo,
- * reminder teal, remarks neutral). The wrapped field's own component
- * (LabeledInput/Chip/DateTimeField) is unchanged; this is a plain wrapper. */
-function Field({
-  flex,
-  accent,
-  icon,
-  accentLabel,
-  children,
-  style,
-}: {
-  flex: number;
-  accent: { color: string; soft: string };
-  icon: any;
-  accentLabel: string;
-  children: React.ReactNode;
-  style?: any;
-}) {
+/** Plain flex column wrapper for one field within a Row — no visual styling
+ * of its own. Each field's own component (LabeledInput/DateTimeField) now
+ * carries its own subtle accent (icon + tinted label + thin left border)
+ * directly, so this wrapper only needs to control width distribution. */
+function Field({ flex, children }: { flex: number; children: React.ReactNode }) {
+  return <View style={{ flex }}>{children}</View>;
+}
+
+/** Compact label row with a small colored icon — used for the Priority
+ * chips, which (unlike LabeledInput) don't have a built-in label. */
+function FieldLabel({ icon, color, text }: { icon: any; color?: string; text: string }) {
   return (
-    <View style={[styles.fieldGroup, { flex, backgroundColor: accent.soft, borderLeftColor: accent.color }, style]}>
-      <View style={styles.fieldGroupTag}>
-        <Ionicons name={icon} size={12} color={accent.color} />
-        <Text style={[styles.fieldGroupTagText, { color: accent.color }]}>{accentLabel}</Text>
-      </View>
-      {children}
+    <View style={styles.fieldLabelRow}>
+      {color ? <Ionicons name={icon} size={13} color={color} /> : null}
+      <Text style={[styles.label, color ? { color, marginBottom: 0 } : null]}>{text}</Text>
     </View>
   );
 }
 
-/** Returns a style object (not part of StyleSheet.create since it's
- * parameterized per field) that tints a LabeledInput's own input box with a
- * field's accent — thin colored left border + very light tinted background.
- * The input's existing border/radius/padding are untouched. */
-function accentedInput(accent: { color: string; soft: string }) {
-  return { borderLeftWidth: 3, borderLeftColor: accent.color, backgroundColor: accent.soft } as const;
-}
-
 const styles = StyleSheet.create({
-  // Centered, width-capped shell so the two-column desktop grid stays
-  // readable on very wide windows instead of stretching edge-to-edge.
-  content: { padding: spacing.lg, paddingBottom: spacing.xxxl, alignItems: 'center' },
-  formShell: { width: '100%', maxWidth: 780 },
+  // Centered, width-capped shell — a clean corporate-form width on desktop
+  // rather than fields stretching edge-to-edge across a wide window; on
+  // narrow viewports width is simply 100% since maxWidth never binds.
+  content: { padding: spacing.lg, paddingBottom: spacing.xxl, alignItems: 'center' },
+  formShell: { width: '100%', maxWidth: 1040 },
   row: { gap: spacing.md, marginBottom: spacing.md },
   compactRow: { marginBottom: spacing.md },
   label: { ...typography.captionMedium, color: colors.textSecondary, marginBottom: spacing.xs },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.xs },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  subSection: { backgroundColor: colors.surface, borderRadius: 12, padding: spacing.md, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.border },
-  hint: { ...typography.caption, color: colors.textMuted, marginTop: -spacing.sm, marginBottom: spacing.md, fontStyle: 'italic' },
-  fieldGroup: { borderRadius: radius.md, borderLeftWidth: 3, padding: spacing.sm, paddingTop: spacing.xs },
-  fieldGroupTag: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  fieldGroupTagText: { ...typography.tiny, textTransform: 'uppercase', letterSpacing: 0.3 },
+  subSection: { backgroundColor: colors.surface, borderRadius: radius.sm, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  hint: { ...typography.caption, color: colors.textMuted, marginTop: -spacing.xs, marginBottom: spacing.sm, fontStyle: 'italic' },
 });
