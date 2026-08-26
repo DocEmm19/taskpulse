@@ -19,6 +19,20 @@ Copy this template for each new change:
 
 ---
 
+## [2026-08-26] New Task screen: fix due-date activity-log off-by-one + non-blocking web reminder save
+- Branch: fix/new-task-date-time-attachments
+- Who: Claude (for Piyush), review follow-up after full QA pass of this branch
+- What:
+  - Due-date activity log off-by-one fixed: `updateTask` logged `Due date set to ${patch.dueDate.slice(0, 10)}`, slicing the raw UTC ISO string. Due dates are stored as local-midnight-as-UTC (DateTimeField.web builds them with `new Date(y, m-1, d)`), so in any timezone ahead of UTC the sliced day was one early — e.g. in IST a due date picked as 30-Nov logged as "2026-11-29" while every screen correctly *displayed* 30-Nov. Now formatted via a new `localYmd()` helper that renders the instant in local time, matching the detail/list display. Storage, queries, and .ics export are untouched.
+  - "Saving…" hang fixed: on web, saving a task with a reminder set `await`ed `ensureWebNotificationPermission()`, which blocks on the browser's notification permission prompt — leaving the Create/Save button stuck on "Saving…" until the user answered, and indefinitely if they ignored it. Now fire-and-forget (`void`) so the save always completes and navigates; the scheduled reminder timer only needs permission by the time it fires (in the future), and web reminders are already flagged best-effort next to the field.
+- Why: both surfaced during the QA pass of this branch — #1 a visible wrong-day in the activity history (and a latent local/UTC storage ambiguity), #2 a save that appeared frozen.
+- Files touched: app/src/db/repositories/tasks.ts (localYmd helper + log line), app/src/screens/NewEditTaskScreen.tsx (non-blocking permission), app/src/db/__tests__/updateTaskDueDate.test.ts (new — TZ-pinned regression test)
+- Tested: tsc pass · npm test pass (87, +2 new) · Playwright production web build in IST: activity log now reads "Due date set to 2026-11-30" matching the 30-Nov-2026 display; task with a reminder + permission in "default" state saves and navigates instantly (no hang); all prior New-Task criteria re-verified
+- Status: merged to main via PR #2
+- Notes / issues for Piyush: deeper multi-timezone correctness (storing due date as a plain date-only value, all-day .ics events) is deferred — not needed for an all-IST team and would touch the day-bucketing queries, so kept out of this fix.
+
+---
+
 ## [2026-08-20] New Task screen: fix attachment delete + harden Due Date/Reminder click
 - Branch: fix/new-task-date-time-attachments
 - Who: Claude (for Abhay), functional bug-fix only — no layout/spacing/color changes

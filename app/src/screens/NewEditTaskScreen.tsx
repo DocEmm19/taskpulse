@@ -225,7 +225,14 @@ export function NewEditTaskScreen() {
         // Best-effort web path (Task 17A) — see the honest caveat rendered
         // next to the reminder field below. Reminder id keyed on the task so
         // re-saving with a new time replaces rather than duplicates the timer.
-        await ensureWebNotificationPermission();
+        // Fire-and-forget the permission prompt. Awaiting it blocked the entire
+        // save — the "Create Task"/"Save" button sat on "Saving…" until the user
+        // answered the browser's notification prompt, and indefinitely if they
+        // dismissed/ignored it. Web reminders are best-effort anyway (see the
+        // caveat rendered next to the field), and the timer scheduled below only
+        // needs permission by the time it actually fires (in the future), so the
+        // grant resolving a moment later is fine.
+        void ensureWebNotificationPermission();
         scheduleWebReminder({ id: `task:${taskId}`, title: 'Task reminder', body: title, fireAt: reminderAt.getTime() });
         await addReminder(taskId, reminderAt.toISOString(), title, null);
       }
