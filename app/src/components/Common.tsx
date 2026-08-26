@@ -40,17 +40,32 @@ export function Loading() {
   );
 }
 
-export function LabeledInput(props: TextInputProps & { label: string; required?: boolean }) {
-  const { label, required, style, ...rest } = props;
+export function LabeledInput(
+  props: TextInputProps & {
+    label: string;
+    required?: boolean;
+    /** Optional subtle accent (New Task screen redesign, and any future
+     * caller that opts in): shows a small icon + tints the label text +
+     * adds a thin colored left border on the input, tightens the input's
+     * corner radius slightly. Omit both (as every pre-existing caller does)
+     * to render pixel-identical to before. */
+    icon?: any;
+    accentColor?: string;
+  }
+) {
+  const { label, required, icon, accentColor, style, ...rest } = props;
   return (
     <View style={styles.field}>
-      <Text style={styles.fieldLabel}>
-        {label}
-        {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
-      </Text>
+      <View style={styles.fieldLabelRow}>
+        {icon ? <Ionicons name={icon} size={13} color={accentColor ?? colors.textSecondary} /> : null}
+        <Text style={[styles.fieldLabel, accentColor ? { color: accentColor } : null]}>
+          {label}
+          {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
+        </Text>
+      </View>
       <TextInput
         placeholderTextColor={colors.textMuted}
-        style={[styles.input, style]}
+        style={[styles.input, accentColor ? { borderLeftWidth: 3, borderLeftColor: accentColor, borderRadius: radius.sm } : null, style]}
         {...rest}
       />
     </View>
@@ -114,7 +129,8 @@ const styles = StyleSheet.create({
   emptySubtitle: { ...typography.caption, color: colors.textMuted, textAlign: 'center', paddingHorizontal: spacing.xl },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   field: { marginBottom: spacing.lg },
-  fieldLabel: { ...typography.captionMedium, color: colors.textSecondary, marginBottom: spacing.xs },
+  fieldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: spacing.xs },
+  fieldLabel: { ...typography.captionMedium, color: colors.textSecondary },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

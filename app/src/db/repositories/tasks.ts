@@ -9,6 +9,20 @@ import { Priority, Task, TaskStatus, TaskWithCategory } from '../../types/models
  * WHERE/SET parameter arrays where TypeScript can't infer a literal tuple. */
 type SqlBindValue = string | number | null;
 
+/** Format a stored due-date ISO instant as its LOCAL calendar day (YYYY-MM-DD).
+ * The due date is stored as local-midnight-as-UTC (DateTimeField.web builds it
+ * with `new Date(y, m-1, d)`), so slicing the raw UTC ISO string was one day
+ * early in any timezone ahead of UTC — e.g. in IST a due date of 30-Nov was
+ * logged as "2026-11-29". Formatting the instant back in local time matches
+ * what the task detail / list screens already display for the same value. */
+function localYmd(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export interface NewTaskInput {
   title: string;
   categoryId: string;
@@ -78,6 +92,7 @@ export interface TaskPatch {
   categoryId?: string;
   priority?: Priority;
   status?: TaskStatus;
+  assignedToName?: string | null;
   dueDate?: string | null;
   reminderAt?: string | null;
   isStarred?: boolean;
@@ -124,10 +139,15 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
       params.push(now);
     }
   }
+  if (patch.assignedToName !== undefined && patch.assignedToName !== before.assigned_to_name) {
+    sets.push('assigned_to_name = ?');
+    params.push(patch.assignedToName);
+    activityLines.push(patch.assignedToName ? `Assigned to ${patch.assignedToName}` : 'Assignee removed');
+  }
   if (patch.dueDate !== undefined && patch.dueDate !== before.due_date) {
     sets.push('due_date = ?');
     params.push(patch.dueDate);
-    activityLines.push(patch.dueDate ? `Due date set to ${patch.dueDate.slice(0, 10)}` : 'Due date removed');
+    activityLines.push(patch.dueDate ? `Due date set to ${localYmd(patch.dueDate)}` : 'Due date removed');
   }
   if (patch.reminderAt !== undefined && patch.reminderAt !== before.reminder_at) {
     sets.push('reminder_at = ?');
@@ -158,6 +178,8 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
       ? 'due_date_changed'
       : line.startsWith('Reminder')
       ? 'reminder_set'
+      : line.startsWith('Assigned to') || line === 'Assignee removed'
+      ? 'assigned'
       : 'status_changed';
     await logActivity(id, eventType as any, line);
   }
