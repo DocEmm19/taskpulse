@@ -11,7 +11,14 @@
 
 // Pin the runtime timezone so the assertion is deterministic on any machine/CI,
 // not just an IST laptop. Must be set before the first Date use in this file.
+// Restore afterwards so the pin can't leak into another test file that Jest
+// happens to run in the same worker process.
+const ORIGINAL_TZ = process.env.TZ;
 process.env.TZ = 'Asia/Kolkata';
+afterAll(() => {
+  if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+  else process.env.TZ = ORIGINAL_TZ;
+});
 
 jest.mock('../database', () => ({
   __esModule: true,
