@@ -610,8 +610,8 @@ commit;
 
 do $$
 declare
-  gaurav_id uuid := '00000000-0000-0000-0000-000000000000'; -- replace with GAURAV's user id
-  abhay_id  uuid := '00000000-0000-0000-0000-000000000000'; -- replace with ABHAY's user id
+  gaurav_id uuid := 'gaurav.thapar@redcliffelabs.com'; -- replace with GAURAV's user id
+  abhay_id  uuid := 'd26ab05a-aeeb-4d44-9731-50d9ac944143'; -- replace with ABHAY's user id
 begin
   if gaurav_id = '00000000-0000-0000-0000-000000000000' or abhay_id = '00000000-0000-0000-0000-000000000000' then
     raise exception 'STEP 2 not configured yet: replace the gaurav_id / abhay_id placeholders above with the two real user UUIDs from Authentication -> Users before running this block.';
