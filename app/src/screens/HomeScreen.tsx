@@ -9,10 +9,11 @@ import { useLiveQuery } from '../db/useLiveQuery';
 import { listTasks, getSmartCounts } from '../db/repositories/tasks';
 import { listCategories } from '../db/repositories/categories';
 import { listUpcomingMeetings, listCalendarEventsBetween } from '../db/repositories/taskExtras';
-import { colors, spacing, typography } from '../theme/theme';
+import { colors, radius, spacing, typography } from '../theme/theme';
 import { useSessionStore } from '../store/sessionStore';
 import { signOutSupabase } from '../lib/sync/auth';
 import { isSupabaseConfigured } from '../lib/sync/supabaseClient';
+import { getSyncHealth, syncHealthLabel, SyncHealth } from '../lib/sync/syncHealth';
 import { Ionicons } from '@expo/vector-icons';
 
 function startEndOfToday() {
@@ -32,6 +33,7 @@ export function HomeScreen() {
   const tasks = useLiveQuery(['tasks', 'task_categories'], () => listTasks({ category }), [category]);
   const { start, end } = useMemo(startEndOfToday, []);
   const todayEvents = useLiveQuery('calendar_events', () => listCalendarEventsBetween(start, end), [start, end]);
+  const syncHealth = useLiveQuery('sync_queue', getSyncHealth);
 
   const greeting = useMemo(() => {
     const h = new Date().getHours();
@@ -73,9 +75,12 @@ export function HomeScreen() {
                 <Text style={styles.dateText}>{format(new Date(), 'EEEE, dd MMMM yyyy')}</Text>
               </View>
               {isSupabaseConfigured() && (
-                <Pressable onPress={handleSignOut} hitSlop={10} style={styles.signOutBtn} accessibilityRole="button" accessibilityLabel="Sign out">
-                  <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
-                </Pressable>
+                <View style={styles.headerActions}>
+                  {syncHealth.data && <SyncPill health={syncHealth.data} />}
+                  <Pressable onPress={handleSignOut} hitSlop={10} style={styles.signOutBtn} accessibilityRole="button" accessibilityLabel="Sign out">
+                    <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
               )}
             </View>
 
@@ -122,11 +127,34 @@ export function HomeScreen() {
   );
 }
 
+/** Small sync-status pill in the Home header. Tapping a "Sync issue" shows the
+ * underlying error so a silent stall becomes visible + diagnosable. */
+function SyncPill({ health }: { health: SyncHealth }) {
+  const { text, tone } = syncHealthLabel(health, Date.now());
+  const color = tone === 'warn' ? colors.warning : colors.textMuted;
+  const onPress = () => {
+    if (tone !== 'warn') return;
+    const msg = health.lastError ? `Some changes haven't synced yet.\n\n${health.lastError}` : "Some changes haven't synced yet.";
+    if (Platform.OS === 'web') window.alert(msg);
+    else Alert.alert('Sync issue', msg);
+  };
+  return (
+    <Pressable onPress={onPress} hitSlop={8} accessibilityRole={tone === 'warn' ? 'button' : 'text'} accessibilityLabel={text} style={styles.syncPill}>
+      <View style={[styles.syncDot, { backgroundColor: color }]} />
+      <Text style={[styles.syncPillText, { color }]}>{text}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   listContent: { padding: spacing.lg, paddingBottom: 120 },
   header: { marginBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' },
   headerText: { flex: 1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   signOutBtn: { padding: spacing.xs, borderRadius: 999, marginLeft: spacing.sm },
+  syncPill: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surface },
+  syncDot: { width: 6, height: 6, borderRadius: 3 },
+  syncPillText: { ...typography.tiny },
   greeting: { ...typography.display, color: colors.textPrimary },
   dateText: { ...typography.body, color: colors.textSecondary, marginTop: 2 },
   countsRow: { gap: spacing.sm, paddingBottom: spacing.md },

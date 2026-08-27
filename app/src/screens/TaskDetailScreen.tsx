@@ -213,18 +213,20 @@ export function TaskDetailScreen() {
                   {c.mobile ? <Text style={styles.contactSub}>{c.mobile}</Text> : null}
                 </View>
                 <View style={styles.contactActions}>
-                  {c.mobile && <Ionicons name="call-outline" size={20} color={colors.brand} onPress={() => callNumber(c.mobile!)} />}
-                  {c.mobile && <Ionicons name="logo-whatsapp" size={20} color="#25D366" onPress={() => openWhatsApp(c.mobile!)} />}
+                  {c.mobile && <Ionicons accessibilityRole="button" accessibilityLabel={`Call ${c.name}`} name="call-outline" size={20} color={colors.brand} onPress={() => callNumber(c.mobile!)} />}
+                  {c.mobile && <Ionicons accessibilityRole="button" accessibilityLabel={`WhatsApp ${c.name}`} name="logo-whatsapp" size={20} color="#25D366" onPress={() => openWhatsApp(c.mobile!)} />}
                   {c.mobile && (
-                    <Ionicons name="copy-outline" size={20} color={colors.textSecondary} onPress={() => copyToClipboard(c.mobile!, 'Number copied')} />
+                    <Ionicons accessibilityRole="button" accessibilityLabel="Copy number" name="copy-outline" size={20} color={colors.textSecondary} onPress={() => copyToClipboard(c.mobile!, 'Number copied')} />
                   )}
                   <Ionicons
+                    accessibilityRole="button"
+                    accessibilityLabel={`Save ${c.name} to phone contacts`}
                     name="person-add-outline"
                     size={20}
                     color={colors.textSecondary}
                     onPress={() => saveContactToDevice(c.name, c.mobile, c.email, c.company)}
                   />
-                  <Ionicons name="close-outline" size={20} color={colors.danger} onPress={() => unlinkContactFromTask(taskId, c.id)} />
+                  <Ionicons accessibilityRole="button" accessibilityLabel={`Unlink ${c.name} from task`} name="close-outline" size={20} color={colors.danger} onPress={() => unlinkContactFromTask(taskId, c.id)} />
                 </View>
               </View>
             ))}
@@ -237,7 +239,7 @@ export function TaskDetailScreen() {
             {emails.map((e) => (
               <View key={e.id} style={styles.rowWithDelete}>
                 <IconTextRow icon="mail-outline" text={`${e.email_address}${e.subject ? ` — ${e.subject}` : ''}`} onPress={() => openEmail(e.email_address, e.subject ?? undefined, e.body ?? undefined)} />
-                <Ionicons name="trash-outline" size={16} color={colors.textMuted} onPress={() => deleteTaskEmail(e.id)} />
+                <Ionicons accessibilityRole="button" accessibilityLabel="Delete email" name="trash-outline" size={16} color={colors.textMuted} onPress={() => deleteTaskEmail(e.id)} />
               </View>
             ))}
           </SectionCard>
@@ -299,7 +301,7 @@ export function TaskDetailScreen() {
             {links.map((l) => (
               <View key={l.id} style={styles.rowWithDelete}>
                 <IconTextRow icon={l.link_type === 'website' ? 'globe-outline' : 'videocam-outline'} text={l.label || l.url} onPress={() => openWebLink(l.url)} />
-                <Ionicons name="trash-outline" size={16} color={colors.textMuted} onPress={() => deleteTaskLink(l.id)} />
+                <Ionicons accessibilityRole="button" accessibilityLabel="Delete link" name="trash-outline" size={16} color={colors.textMuted} onPress={() => deleteTaskLink(l.id)} />
               </View>
             ))}
           </SectionCard>

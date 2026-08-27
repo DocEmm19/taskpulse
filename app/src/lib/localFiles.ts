@@ -66,6 +66,14 @@ export async function persistLocalFile(sourceUri: string, extension: string): Pr
 /** Reads a locally-stored attachment as raw bytes for upload to Supabase
  * Storage — no base64 round-trip needed with the modern expo-file-system API. */
 export async function readFileBytes(uri: string): Promise<Uint8Array> {
+  if (Platform.OS === 'web') {
+    // On web, local_path is a data: (or blob:) URL, not a filesystem path —
+    // expo-file-system's File can't read it. fetch() decodes both (same trick
+    // persistLocalFileWeb uses). Without this, the Storage upload silently
+    // failed on web, so web attachments never left the device. P1.
+    const res = await fetch(uri);
+    return new Uint8Array(await res.arrayBuffer());
+  }
   const file = new File(uri);
   return file.bytes();
 }

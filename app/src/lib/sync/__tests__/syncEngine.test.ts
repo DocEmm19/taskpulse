@@ -43,13 +43,26 @@ jest.mock('../pull', () => ({
 jest.mock('../../../db/database', () => ({
   __esModule: true,
   getDb: jest.fn(),
+  setMeta: jest.fn(), // runSyncCycle records sync.lastOkAt (P0 sync pill)
 }));
 
 import NetInfo from '@react-native-community/netinfo';
 import * as supabaseClient from '../supabaseClient';
 import * as pull from '../pull';
 import { getDb } from '../../../db/database';
-import { runSyncCycle, sanitizeRow } from '../syncEngine';
+import { runSyncCycle, sanitizeRow, childDeleteNotInList } from '../syncEngine';
+
+describe('childDeleteNotInList (P3 child-delete mirror filter)', () => {
+  test('empty local set => null (caller deletes ALL of the task\'s cloud children)', () => {
+    expect(childDeleteNotInList([])).toBeNull();
+  });
+  test('ids are quoted for a PostgREST not-in over uuid/text columns', () => {
+    expect(childDeleteNotInList(['a1b2-uuid', 'c3d4-uuid'])).toBe('("a1b2-uuid","c3d4-uuid")');
+  });
+  test('strips stray quotes so the filter string can not be broken out of', () => {
+    expect(childDeleteNotInList(['a"b'])).toBe('("ab")');
+  });
+});
 
 const mockedGetDb = getDb as jest.MockedFunction<typeof getDb>;
 const mockedFetch = NetInfo.fetch as jest.Mock;
@@ -260,6 +273,7 @@ describe('connectivity — web path never calls NetInfo', () => {
     jest.doMock('../../../db/database', () => ({
       __esModule: true,
       getDb: jest.fn(async () => makeEmptyQueueDb()),
+      setMeta: jest.fn(),
     }));
 
     (global as any).navigator = { onLine };

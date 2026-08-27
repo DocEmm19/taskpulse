@@ -333,8 +333,10 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
                   )}
                 </Pressable>
                 <View style={styles.attachmentActions}>
-                  <Ionicons name="share-outline" size={18} color={colors.textSecondary} onPress={() => shareFile(att)} />
+                  <Ionicons accessibilityRole="button" accessibilityLabel={`Share ${att.file_name}`} name="share-outline" size={18} color={colors.textSecondary} onPress={() => shareFile(att)} />
                   <Ionicons
+                    accessibilityRole="button"
+                    accessibilityLabel={`Rename ${att.file_name}`}
                     name="pencil-outline"
                     size={18}
                     color={colors.textSecondary}
@@ -343,7 +345,7 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
                       setRenameText(att.file_name);
                     }}
                   />
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} onPress={() => confirmDelete(att)} />
+                  <Ionicons accessibilityRole="button" accessibilityLabel={`Delete ${att.file_name}`} name="trash-outline" size={18} color={colors.danger} onPress={() => confirmDelete(att)} />
                 </View>
               </View>
             );

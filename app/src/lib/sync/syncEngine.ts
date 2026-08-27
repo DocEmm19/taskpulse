@@ -1,6 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { readFileBytes, persistDownloadedFile } from '../localFiles';
-import { getDb } from '../../db/database';
+import { getDb, setMeta } from '../../db/database';
 import { getSupabase, isSupabaseConfigured, ATTACHMENTS_BUCKET } from './supabaseClient';
 import { getCurrentUserId } from '../../store/sessionStore';
 import { notifyTablesChanged } from '../../db/events';
@@ -149,6 +149,11 @@ export async function runSyncCycle(): Promise<void> {
     for (const att of missingFiles) {
       await pullAttachmentFile(att.id).catch((err) => console.warn(`[sync] attachment download failed for ${att.id}:`, err));
     }
+
+    // Cycle completed without throwing — record it so the Home sync pill can
+    // show "Synced <n>m ago" and, by contrast, surface a stall. See syncHealth.ts.
+    await setMeta('sync.lastOkAt', new Date().toISOString());
+    notifyTablesChanged('sync_queue');
   } finally {
     isRunning = false;
   }
@@ -222,13 +227,35 @@ async function pushDirectRow(table: string, id: string, operation: SyncQueueItem
   }
 }
 
+/** PostgREST value list for a NOT-IN filter over text/uuid ids, quoted so
+ * hyphenated UUIDs parse. Returns null when there are no local ids (the caller
+ * then deletes ALL of the task's cloud child rows). Exported + unit-tested
+ * because a malformed filter here could delete the wrong rows. */
+export function childDeleteNotInList(localIds: string[]): string | null {
+  if (localIds.length === 0) return null;
+  return `(${localIds.map((id) => `"${String(id).replace(/"/g, '')}"`).join(',')})`;
+}
+
 async function pushTaskChildren(table: string, taskId: string) {
   const supabase = getSupabase();
   if (!supabase) return;
   const db = await getDb();
   const rows = await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${table} WHERE task_id = ?`, [taskId]);
-  if (rows.length === 0) return;
-  const { error } = await supabase.from(table).upsert(rows.map((row) => sanitizeRow(row, table)));
+  if (rows.length > 0) {
+    const { error } = await supabase.from(table).upsert(rows.map((row) => sanitizeRow(row, table)));
+    if (error) throw error;
+  }
+  // Mirror local deletions to the cloud. Upsert alone can't remove a row the
+  // user deleted locally, so without this a deleted link/email/contact stays
+  // in the cloud and RESURRECTS on the next pull (which delete+reinserts the
+  // task's whole child set from the cloud). Always scoped by task_id.
+  // ponytail: last-writer-wins over a task's child SET — a concurrent add on
+  // another device inside the same sync window can be dropped. Fine for this
+  // workspace size; upgrade path = per-row tombstones if it ever bites.
+  const notIn = childDeleteNotInList(rows.map((r) => String(r.id)));
+  let q = supabase.from(table).delete().eq('task_id', taskId);
+  if (notIn) q = q.not('id', 'in', notIn);
+  const { error } = await q;
   if (error) throw error;
 }
 
