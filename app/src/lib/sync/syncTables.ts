@@ -88,7 +88,12 @@ export const TABLE_COLUMNS: Record<DirectCloudTable, readonly string[]> = {
     'file_size_bytes',
     'mime_type',
     'duration_seconds',
-    'local_path',
+    // NOTE: local_path is intentionally NOT synced. On web it holds the file's
+    // bytes as a base64 data: URL — shipping that through Postgres bloated the
+    // (500MB free-tier) DB and would break on large videos. Files now travel
+    // via Supabase Storage only: push uploads bytes + sets storage_path, and
+    // each other device downloads them from Storage on pull (see syncEngine
+    // pullAttachmentFile). local_path stays a per-device local pointer.
     'storage_path',
     'uploaded_by',
     'sync_status',

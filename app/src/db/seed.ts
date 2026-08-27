@@ -1,7 +1,7 @@
 import { getDb, getMeta, setMeta } from './database';
 import { newId } from '../lib/uuid';
 import { ensureDefaultCategories, listCategories } from './repositories/categories';
-import { createTask, reassignTask, updateTask, addRemark } from './repositories/tasks';
+import { createTask, reassignTask, updateTask, addRemark, softDeleteTask } from './repositories/tasks';
 import { createContact, linkContactToTask } from './repositories/contacts';
 import { addTaskEmail, addTaskLink, setTaskLocation, setTaskMeeting, setTravelPlan, addCalendarEvent } from './repositories/taskExtras';
 import { notifyTablesChanged } from './events';
@@ -26,6 +26,64 @@ function daysFromNowIso(days: number, hour = 15): string {
  * the app is immediately useful to explore. Runs exactly once (guarded by
  * app_meta) — safe to call on every launch.
  */
+const SEED_PURGE_FLAG = 'seed_purged_v1';
+
+// The exact built-in demo rows this app used to seed (titles/names are the only
+// identifier — seeded rows carry no is_demo flag). The purge below matches ONLY
+// these, so a real user task/contact/meeting is never removed even if the purge
+// somehow runs after real data exists. Keep in sync with the seed data above.
+const DEMO_TASK_TITLES = [
+  'Client Payment Follow-up', 'Mumbai Client Meeting', 'Client Office Meeting',
+  'Prepare Client Discussion Notes', 'Vendor Agreement Signature',
+  "Abhay's Passport Renewal Appointment", 'Send Signed Contract to Legal',
+  'Quarterly Report Compilation', 'Book Cab for Airport Pickup',
+];
+const DEMO_CONTACT_NAMES = ['Rajni', 'Mohit', 'Raman', 'Mr. Kapoor'];
+const DEMO_CALENDAR_TITLES = ['Internal Finance Meeting', 'Client Call', 'Abhay Singavi — 1:1'];
+
+/**
+ * One-time clean-slate purge, replacing the old demo-data seeding. TaskPulse is
+ * now a real shared workspace, so the built-in sample rows are removed instead
+ * of created. Runs once per device (guarded by app_meta) and is SURGICAL: it
+ * only removes rows matching the known demo titles/names above, never real user
+ * data. Demo tasks are removed via softDeleteTask so the removal SYNCS to other
+ * devices; local demo contacts/meetings are cleared locally.
+ *
+ * Pair with the cloud clean-slate SQL (run first) so synced demo rows don't get
+ * pulled back down.
+ */
+export async function purgeSeedDataOnce(): Promise<void> {
+  await ensureDefaultCategories();
+  const done = await getMeta(SEED_PURGE_FLAG);
+  if (done) return;
+  const db = await getDb();
+
+  const taskPlaceholders = DEMO_TASK_TITLES.map(() => '?').join(',');
+  const demoTasks = await db.getAllAsync<{ id: string }>(
+    `SELECT id FROM tasks WHERE deleted_at IS NULL AND title IN (${taskPlaceholders})`,
+    DEMO_TASK_TITLES
+  );
+  for (const t of demoTasks) {
+    await softDeleteTask(t.id); // soft-delete + enqueue DELETE so it propagates
+  }
+
+  await db.withTransactionAsync(async () => {
+    const cn = DEMO_CONTACT_NAMES.map(() => '?').join(',');
+    await db.runAsync(
+      `DELETE FROM task_contacts WHERE contact_id IN (SELECT id FROM contacts WHERE name IN (${cn}))`,
+      DEMO_CONTACT_NAMES
+    );
+    await db.runAsync(`DELETE FROM contacts WHERE name IN (${cn})`, DEMO_CONTACT_NAMES);
+    const ct = DEMO_CALENDAR_TITLES.map(() => '?').join(',');
+    await db.runAsync(`DELETE FROM calendar_events WHERE title IN (${ct})`, DEMO_CALENDAR_TITLES);
+  });
+
+  await setMeta(SEED_PURGE_FLAG, new Date().toISOString());
+  notifyTablesChanged(['tasks', 'contacts', 'calendar_events', 'task_contacts']);
+}
+
+// Retained (no longer called) so its imports stay referenced; TaskPulse no
+// longer auto-seeds demo data — see purgeSeedDataOnce above.
 export async function seedDemoDataIfNeeded(): Promise<void> {
   await ensureDefaultCategories();
   const already = await getMeta(SEED_FLAG);

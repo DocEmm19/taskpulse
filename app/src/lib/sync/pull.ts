@@ -114,7 +114,17 @@ async function defaultUpsertRow(table: string, columns: readonly string[], row: 
   const db = await getDb();
   const placeholders = columns.map(() => '?').join(', ');
   const values = columns.map((c) => toBindValue(row[c]));
-  await db.runAsync(`INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`, values);
+  // Upsert via INSERT ... ON CONFLICT(id) DO UPDATE rather than INSERT OR
+  // REPLACE. REPLACE deletes+reinserts the whole row, so any column NOT in the
+  // synced whitelist reverts to its default — which would null out a device's
+  // local-only `attachments.local_path` (the on-disk/data-URL pointer to the
+  // file) every time its row is pulled, forcing a needless re-download and, on
+  // the uploader, orphaning the file it just attached. DO UPDATE writes only
+  // the synced columns and leaves local-only columns untouched.
+  const updates = columns.filter((c) => c !== 'id').map((c) => `${c} = excluded.${c}`).join(', ');
+  const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})
+     ON CONFLICT(id) DO UPDATE SET ${updates}`;
+  await db.runAsync(sql, values);
 }
 
 async function defaultDeleteRows(table: string, taskIds: string[]): Promise<void> {
