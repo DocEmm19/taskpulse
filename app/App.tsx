@@ -9,7 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { getDb } from './src/db/database';
 import { ensureDefaultCategories } from './src/db/repositories/categories';
-import { seedDemoDataIfNeeded } from './src/db/seed';
+import { purgeSeedDataOnce } from './src/db/seed';
 import { useSessionStore } from './src/store/sessionStore';
 import { startSyncEngine } from './src/lib/sync/syncEngine';
 import { isSupabaseConfigured, getSupabase } from './src/lib/sync/supabaseClient';
@@ -37,7 +37,7 @@ export default function App() {
         await hydrate(); // local user/device identity (AsyncStorage) — see sessionStore.ts
         await getDb(); // opens SQLite + runs CREATE TABLE migrations — see db/database.ts
         await ensureDefaultCategories(); // Personal/Official/Travel/Urgent (Req. #4)
-        await seedDemoDataIfNeeded(); // realistic demo data, first launch only
+        await purgeSeedDataOnce(); // one-time clean slate (replaces demo seeding)
         await resolveCloudGate();
         startSyncEngine(); // no-op until Supabase credentials are configured — see SUPABASE_SETUP.md
         setReady(true);

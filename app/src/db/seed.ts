@@ -1,7 +1,7 @@
 import { getDb, getMeta, setMeta } from './database';
 import { newId } from '../lib/uuid';
 import { ensureDefaultCategories, listCategories } from './repositories/categories';
-import { createTask, reassignTask, updateTask, addRemark } from './repositories/tasks';
+import { createTask, reassignTask, updateTask, addRemark, softDeleteTask } from './repositories/tasks';
 import { createContact, linkContactToTask } from './repositories/contacts';
 import { addTaskEmail, addTaskLink, setTaskLocation, setTaskMeeting, setTravelPlan, addCalendarEvent } from './repositories/taskExtras';
 import { notifyTablesChanged } from './events';
@@ -26,6 +26,40 @@ function daysFromNowIso(days: number, hour = 15): string {
  * the app is immediately useful to explore. Runs exactly once (guarded by
  * app_meta) — safe to call on every launch.
  */
+const SEED_PURGE_FLAG = 'seed_purged_v1';
+
+/**
+ * One-time clean-slate purge, replacing the old demo-data seeding. TaskPulse is
+ * now a real shared workspace, so the built-in sample tasks/contacts/meetings
+ * are removed instead of created. Runs exactly once per device (guarded by
+ * app_meta): soft-deletes every existing task via softDeleteTask so the removal
+ * SYNCS to the other devices, and clears the purely-local demo contacts and
+ * calendar meetings (FK-safe order: junction rows before their parents).
+ * After it runs once, tasks/contacts created afterward are never touched.
+ *
+ * Pair with the cloud clean-slate SQL (removes any demo rows already synced to
+ * Supabase) so nothing gets pulled back down.
+ */
+export async function purgeSeedDataOnce(): Promise<void> {
+  await ensureDefaultCategories();
+  const done = await getMeta(SEED_PURGE_FLAG);
+  if (done) return;
+  const db = await getDb();
+  const tasks = await db.getAllAsync<{ id: string }>('SELECT id FROM tasks WHERE deleted_at IS NULL');
+  for (const t of tasks) {
+    await softDeleteTask(t.id); // soft-delete + enqueue DELETE so it propagates
+  }
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM task_contacts'); // junction first (FK ON)
+    await db.runAsync('DELETE FROM contacts');
+    await db.runAsync('DELETE FROM calendar_events');
+  });
+  await setMeta(SEED_PURGE_FLAG, new Date().toISOString());
+  notifyTablesChanged(['tasks', 'contacts', 'calendar_events', 'task_contacts']);
+}
+
+// Retained (no longer called) so its imports stay referenced; TaskPulse no
+// longer auto-seeds demo data — see purgeSeedDataOnce above.
 export async function seedDemoDataIfNeeded(): Promise<void> {
   await ensureDefaultCategories();
   const already = await getMeta(SEED_FLAG);
