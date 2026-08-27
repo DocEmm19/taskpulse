@@ -79,10 +79,21 @@ export async function listCategories(): Promise<TaskCategory[]> {
   // Custom (non-default) categories are never deduped.
   return db.getAllAsync<TaskCategory>(
     `SELECT * FROM task_categories
-     WHERE is_default = 0
-        OR id IN (SELECT MIN(id) FROM task_categories WHERE is_default = 1 GROUP BY name)
+     WHERE deleted_at IS NULL
+       AND (is_default = 0 OR id IN (SELECT MIN(id) FROM task_categories WHERE is_default = 1 AND deleted_at IS NULL GROUP BY name))
      ORDER BY sort_order ASC, name ASC`
   );
+}
+
+/** Soft-delete a category so the removal syncs to other devices (same DELETE
+ * path tasks use). Tasks that referenced it fall back to a plain "Task" label
+ * via the list query's LEFT JOIN, so nothing breaks. */
+export async function deleteCategory(id: string): Promise<void> {
+  const db = await getDb();
+  const now = nowIso();
+  await db.runAsync(`UPDATE task_categories SET deleted_at = ?, updated_at = ? WHERE id = ?`, [now, now, id]);
+  await enqueueSync('task_category', id, 'DELETE');
+  notifyTablesChanged('task_categories');
 }
 
 /** Map a (possibly duplicate) default category id to the one listCategories()
@@ -98,7 +109,7 @@ export async function canonicalCategoryId(id: string): Promise<string> {
   );
   if (!row || !row.is_default) return id;
   const canon = await db.getFirstAsync<{ id: string | null }>(
-    'SELECT MIN(id) as id FROM task_categories WHERE is_default = 1 AND name = ?',
+    'SELECT MIN(id) as id FROM task_categories WHERE is_default = 1 AND deleted_at IS NULL AND name = ?',
     [row.name]
   );
   return canon?.id ?? id;
