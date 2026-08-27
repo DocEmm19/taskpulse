@@ -629,6 +629,35 @@ begin
 end $$;
 
 -- ============================================================================
+-- Server-authoritative updated_at (fresh-install copy of migration 003).
+-- Stamps updated_at = now() on every insert/update so cross-device sync uses
+-- ONE clock and the pull watermark can't outrun a peer's updates. Existing
+-- projects should run migrations/003_server_stamped_updated_at.sql instead.
+-- ============================================================================
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['tasks', 'contacts', 'task_categories', 'attachments', 'calendar_events']
+  loop
+    execute format('drop trigger if exists set_updated_at on public.%I', t);
+    execute format(
+      'create trigger set_updated_at before insert or update on public.%I
+         for each row execute function public.set_updated_at()', t);
+  end loop;
+end $$;
+
+-- ============================================================================
 -- All done. Next: copy your Project URL + anon key (Project Settings → API)
 -- into EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_ANON_KEY in the app's
 -- environment — see SUPABASE_SETUP.md. Gaurav and Abhay should now each be

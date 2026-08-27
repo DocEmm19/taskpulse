@@ -32,6 +32,26 @@ import type { getSupabase as GetSupabaseFn } from './supabaseClient';
 
 const DEFAULT_WATERMARK = '1970-01-01T00:00:00Z';
 
+const WATERMARK_RESET_FLAG = 'sync.watermarkReset.v1';
+
+/** One-time self-heal for the client-clock watermark bug. Older builds advanced
+ * each `last_pull:<table>` watermark to the max *client-stamped* `updated_at`
+ * seen. A device whose clock ran ahead would inflate its watermark past a
+ * peer's genuinely-later updates, so `gt('updated_at', watermark)` filtered
+ * those updates out permanently (a task edited on one device never reached the
+ * other). Once `updated_at` is stamped server-side (migration
+ * 003_server_stamped_updated_at.sql), resetting the watermarks lets the next
+ * pull rebuild them from authoritative server timestamps. Guarded by app_meta
+ * so it runs exactly once per device; the next `runSyncCycle` re-pulls
+ * everything (idempotent) and re-establishes correct watermarks. */
+export async function resetSyncWatermarksOnce(): Promise<void> {
+  if (await getMeta(WATERMARK_RESET_FLAG)) return;
+  for (const table of DIRECT_CLOUD_TABLES) {
+    await setMeta(`last_pull:${table}`, DEFAULT_WATERMARK);
+  }
+  await setMeta(WATERMARK_RESET_FLAG, new Date().toISOString());
+}
+
 type CloudRow = Record<string, unknown>;
 
 // TABLE_COLUMNS / TASK_CHILD_COLUMNS (the per-cloud-table column whitelists,

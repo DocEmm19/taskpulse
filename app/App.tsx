@@ -12,6 +12,7 @@ import { ensureDefaultCategories, ensureNetworkCategoryOnce } from './src/db/rep
 import { purgeSeedDataOnce } from './src/db/seed';
 import { useSessionStore } from './src/store/sessionStore';
 import { startSyncEngine } from './src/lib/sync/syncEngine';
+import { resetSyncWatermarksOnce } from './src/lib/sync/pull';
 import { isSupabaseConfigured, getSupabase } from './src/lib/sync/supabaseClient';
 import { getSupabaseSessionUserId } from './src/lib/sync/auth';
 import { shouldShowAppAfterGate } from './src/lib/authGate';
@@ -44,6 +45,7 @@ export default function App() {
         await ensureDefaultCategories(); // Personal/Official/Travel/Urgent/Network
         await ensureNetworkCategoryOnce(); // backfill Network on pre-existing installs
         await purgeSeedDataOnce(); // one-time clean slate (replaces demo seeding)
+        await resetSyncWatermarksOnce(); // one-time self-heal for the client-clock watermark bug (see pull.ts)
         await resolveCloudGate();
         startSyncEngine(); // no-op until Supabase credentials are configured — see SUPABASE_SETUP.md
         setReady(true);
