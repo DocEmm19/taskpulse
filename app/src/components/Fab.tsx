@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.lg,
     bottom: 84,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.brandDark, // deeper cobalt fill → white label clears WCAG AA
     borderRadius: radius.pill,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,

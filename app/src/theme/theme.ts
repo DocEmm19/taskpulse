@@ -25,7 +25,9 @@ export const colors = {
   border: '#262A31', // quiet cool hairline
   textPrimary: '#E8EAED', // cool off-white (not #FFF — reduces glare)
   textSecondary: '#9BA1AC', // cool grey
-  textMuted: '#626873', // cool muted grey
+  textMuted: '#838A95', // cool muted grey — lifted to clear WCAG AA (~5.5:1 on
+  // surface); the old #626873 was ~3.2:1 and this token carries real content
+  // (task-card meta line, placeholders, inactive tab labels), not just chrome.
 
   // Signature accent — a single electric cobalt, used sparingly (primary
   // actions, active states, the priority "coin", focus). brandDark is the
