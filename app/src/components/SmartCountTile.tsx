@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { colors, radius, shadow, spacing, typography } from '../theme/theme';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
+import { colors, radius, shadow, spacing, tnum, typography } from '../theme/theme';
 
 interface Props {
   label: string;
@@ -16,9 +16,9 @@ interface Props {
  * row (Req. #30) — tapping opens the corresponding filtered task list. */
 export function SmartCountTile({ label, count, color = colors.brand, onPress, index = 0 }: Props) {
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay(index * 40)}>
-      <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { transform: [{ scale: pressed ? 0.95 : 1 }] }, pressed && { opacity: 0.9 }]}>
-        <Text style={[styles.count, { color }]}>{count}</Text>
+    <Animated.View entering={FadeInDown.duration(200).delay(Math.min(index, 5) * 26).reduceMotion(ReduceMotion.System)}>
+      <Pressable onPress={onPress} style={({ pressed }) => [styles.tile, { transform: [{ scale: pressed ? 0.97 : 1 }] }, pressed && { opacity: 0.9 }]}>
+        <Text style={[styles.count, tnum, { color }]}>{count}</Text>
         <Text style={styles.label}>{label}</Text>
       </Pressable>
     </Animated.View>
