@@ -17,6 +17,7 @@ import { getSupabaseSessionUserId } from './src/lib/sync/auth';
 import { shouldShowAppAfterGate } from './src/lib/authGate';
 import { isWeb } from './src/lib/platform';
 import { claimLocalDataForUser, adoptOrphanCategoriesForUser } from './src/db/claimOwnership';
+import { useFonts, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { AuthGateScreen } from './src/screens/AuthGateScreen';
 import { colors } from './src/theme/theme';
@@ -30,6 +31,7 @@ export default function App() {
   const [showApp, setShowApp] = useState<boolean | null>(null);
   const hydrate = useSessionStore((s) => s.hydrate);
   const setSupabaseUserId = useSessionStore((s) => s.setSupabaseUserId);
+  const [fontsLoaded] = useFonts({ SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
 
   useEffect(() => {
     (async () => {
@@ -96,7 +98,7 @@ export default function App() {
     );
   }
 
-  if (!ready || showApp === null) {
+  if (!ready || showApp === null || !fontsLoaded) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.brand} />

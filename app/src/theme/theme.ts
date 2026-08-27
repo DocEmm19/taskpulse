@@ -83,9 +83,13 @@ export const fonts = {
 };
 
 export const typography = {
-  display: { fontSize: 30, fontWeight: '800' as const, lineHeight: 36, letterSpacing: -0.6 },
-  h1: { fontSize: 22, fontWeight: '700' as const, lineHeight: 28, letterSpacing: -0.3 },
-  h2: { fontSize: 17, fontWeight: '600' as const, lineHeight: 23, letterSpacing: -0.1 },
+  // Display + headings use Space Grotesk (loaded in App.tsx) for CRED-style
+  // geometric character; body/captions stay on the system sans. The font
+  // variants are already bold/semibold, so fontWeight is just a pre-load
+  // fallback.
+  display: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 30, fontWeight: '800' as const, lineHeight: 36, letterSpacing: -0.6 },
+  h1: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, fontWeight: '700' as const, lineHeight: 28, letterSpacing: -0.3 },
+  h2: { fontFamily: 'SpaceGrotesk_600SemiBold', fontSize: 17, fontWeight: '600' as const, lineHeight: 23, letterSpacing: -0.1 },
   body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
   bodyMedium: { fontSize: 15, fontWeight: '600' as const, lineHeight: 22 },
   caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
