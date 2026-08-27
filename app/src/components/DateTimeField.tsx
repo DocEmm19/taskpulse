@@ -67,7 +67,7 @@ export function DateTimeField({ label, value, onChange, mode = 'date', clearable
         <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
         <Text style={[styles.value, !value && { color: colors.textMuted }]}>{displayText}</Text>
         {clearable && value ? (
-          <Ionicons name="close-circle" size={18} color={colors.textMuted} onPress={() => onChange(null)} />
+          <Ionicons accessibilityRole="button" accessibilityLabel="Clear" name="close-circle" size={18} color={colors.textMuted} onPress={() => onChange(null)} />
         ) : null}
       </Pressable>
       {Platform.OS === 'ios' && showIOSPicker && (

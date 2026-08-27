@@ -18,7 +18,7 @@ export function ContactsScreen() {
       <View style={styles.searchBar}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput value={search} onChangeText={setSearch} placeholder="Search contacts..." placeholderTextColor={colors.textMuted} style={styles.searchInput} />
-        <Ionicons name="person-add-outline" size={22} color={colors.brand} onPress={() => navigation.navigate('ContactDetail', {})} />
+        <Ionicons accessibilityRole="button" accessibilityLabel="Add contact" name="person-add-outline" size={22} color={colors.brand} onPress={() => navigation.navigate('ContactDetail', {})} />
       </View>
 
       <FlatList
@@ -36,9 +36,9 @@ export function ContactsScreen() {
             </View>
             {item.mobile ? (
               <View style={styles.quickActions}>
-                <Ionicons name="call-outline" size={20} color={colors.brand} onPress={() => callNumber(item.mobile!)} />
-                <Ionicons name="logo-whatsapp" size={20} color="#25D366" onPress={() => openWhatsApp(item.mobile!)} />
-                <Ionicons name="copy-outline" size={20} color={colors.textSecondary} onPress={() => copyToClipboard(item.mobile!, 'Number copied')} />
+                <Ionicons accessibilityRole="button" accessibilityLabel={`Call ${item.name}`} name="call-outline" size={20} color={colors.brand} onPress={() => callNumber(item.mobile!)} />
+                <Ionicons accessibilityRole="button" accessibilityLabel={`WhatsApp ${item.name}`} name="logo-whatsapp" size={20} color="#25D366" onPress={() => openWhatsApp(item.mobile!)} />
+                <Ionicons accessibilityRole="button" accessibilityLabel="Copy number" name="copy-outline" size={20} color={colors.textSecondary} onPress={() => copyToClipboard(item.mobile!, 'Number copied')} />
               </View>
             ) : null}
           </Pressable>

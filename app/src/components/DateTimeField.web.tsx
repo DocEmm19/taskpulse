@@ -125,7 +125,7 @@ export function DateTimeField({ label, value, onChange, mode = 'date', clearable
         </Pressable>
         {clearable && value ? (
           <View style={styles.clearWrap}>
-            <Ionicons name="close-circle" size={18} color={colors.textMuted} onPress={() => onChange(null)} />
+            <Ionicons accessibilityRole="button" accessibilityLabel="Clear" name="close-circle" size={18} color={colors.textMuted} onPress={() => onChange(null)} />
           </View>
         ) : null}
       </View>
