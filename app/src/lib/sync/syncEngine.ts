@@ -1,5 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
-import { readFileBytes } from '../localFiles';
+import { readFileBytes, persistDownloadedFile } from '../localFiles';
 import { getDb } from '../../db/database';
 import { getSupabase, isSupabaseConfigured, ATTACHMENTS_BUCKET } from './supabaseClient';
 import { getCurrentUserId } from '../../store/sessionStore';
@@ -137,9 +137,45 @@ export async function runSyncCycle(): Promise<void> {
     // step throws.
     const changedTaskIds = await pullDirectTables();
     await pullTaskChildren(changedTaskIds);
+
+    // Download any attachment whose bytes live in Supabase Storage but aren't on
+    // this device yet — i.e. one another member uploaded, pulled above as a
+    // metadata row with a storage_path but no local file. Idempotent: once a
+    // file is downloaded its local_path is set, so it's not re-selected. A
+    // failed download is logged and retried next cycle, never blocking the rest.
+    const missingFiles = await db.getAllAsync<{ id: string }>(
+      `SELECT id FROM attachments WHERE storage_path IS NOT NULL AND (local_path IS NULL OR local_path = '')`
+    );
+    for (const att of missingFiles) {
+      await pullAttachmentFile(att.id).catch((err) => console.warn(`[sync] attachment download failed for ${att.id}:`, err));
+    }
   } finally {
     isRunning = false;
   }
+}
+
+/** Receive side of Storage-based attachment sync: download an attachment's
+ * bytes from Supabase Storage into this device's local store and record the
+ * local_path. Counterpart to pushAttachmentFile()'s upload. No-op if the file
+ * is already local or has no storage_path yet. */
+async function pullAttachmentFile(attachmentId: string) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ storage_path: string | null; file_name: string; local_path: string | null }>(
+    'SELECT storage_path, file_name, local_path FROM attachments WHERE id = ?',
+    [attachmentId]
+  );
+  if (!row || !row.storage_path || row.local_path) return;
+
+  const { data, error } = await supabase.storage.from(ATTACHMENTS_BUCKET).download(row.storage_path);
+  if (error) throw error;
+  if (!data) return;
+
+  const extension = row.file_name.includes('.') ? row.file_name.split('.').pop()! : 'bin';
+  const localPath = await persistDownloadedFile(data as Blob, extension);
+  await db.runAsync(`UPDATE attachments SET local_path = ?, sync_status = 'synced' WHERE id = ?`, [localPath, attachmentId]);
+  notifyTablesChanged('attachments');
 }
 
 async function processQueueItem(item: SyncQueueItem) {

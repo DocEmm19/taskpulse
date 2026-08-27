@@ -69,3 +69,27 @@ export async function readFileBytes(uri: string): Promise<Uint8Array> {
   const file = new File(uri);
   return file.bytes();
 }
+
+/** Persists a file downloaded from Supabase Storage (a Blob) into this device's
+ * local store and returns the local_path to save on the attachment row. Web
+ * stores it as a data: URL (same shape as picker/recorder results, so playback
+ * and preview work unchanged); native writes it to the app's documents dir.
+ * This is the receive side of Storage-based attachment sync — the counterpart
+ * to readFileBytes()/pushAttachmentFile()'s upload. */
+export async function persistDownloadedFile(blob: Blob, extension: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read downloaded attachment'));
+      reader.readAsDataURL(blob);
+    });
+  }
+  const dir = attachmentsDir();
+  const fileName = `${Date.now()}_${Math.round(Math.random() * 1e6)}.${extension}`;
+  const destFile = new File(dir, fileName);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  destFile.create();
+  destFile.write(bytes);
+  return destFile.uri;
+}
