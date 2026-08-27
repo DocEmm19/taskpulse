@@ -81,13 +81,13 @@ export function HomeScreen() {
 
             {counts.data && (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.countsRow}>
-                <SmartCountTile label="P1" count={counts.data.p1} color={colors.p1} onPress={() => navigation.navigate('Tasks', { priority: 'P1' })} />
-                <SmartCountTile label="P2" count={counts.data.p2} color={colors.p2} onPress={() => navigation.navigate('Tasks', { priority: 'P2' })} />
-                <SmartCountTile label="P3" count={counts.data.p3} color={colors.p3} onPress={() => navigation.navigate('Tasks', { priority: 'P3' })} />
-                <SmartCountTile label="Overdue" count={counts.data.overdue} color={colors.danger} onPress={() => navigation.navigate('Tasks', { dateFilter: 'overdue' })} />
-                <SmartCountTile label="Today" count={counts.data.today} color={colors.brand} onPress={() => navigation.navigate('Tasks', { dateFilter: 'today' })} />
-                <SmartCountTile label="Travel" count={counts.data.travel} color={colors.categoryTravel} onPress={() => navigation.navigate('Travel')} />
-                <SmartCountTile label="Meetings" count={counts.data.meetings} color={colors.categoryPersonal} onPress={() => navigation.navigate('Calendar')} />
+                <SmartCountTile index={0} label="P1" count={counts.data.p1} color={colors.p1} onPress={() => navigation.navigate('Tasks', { priority: 'P1' })} />
+                <SmartCountTile index={1} label="P2" count={counts.data.p2} color={colors.p2} onPress={() => navigation.navigate('Tasks', { priority: 'P2' })} />
+                <SmartCountTile index={2} label="P3" count={counts.data.p3} color={colors.p3} onPress={() => navigation.navigate('Tasks', { priority: 'P3' })} />
+                <SmartCountTile index={3} label="Overdue" count={counts.data.overdue} color={colors.danger} onPress={() => navigation.navigate('Tasks', { dateFilter: 'overdue' })} />
+                <SmartCountTile index={4} label="Today" count={counts.data.today} color={colors.brand} onPress={() => navigation.navigate('Tasks', { dateFilter: 'today' })} />
+                <SmartCountTile index={5} label="Travel" count={counts.data.travel} color={colors.categoryTravel} onPress={() => navigation.navigate('Travel')} />
+                <SmartCountTile index={6} label="Meetings" count={counts.data.meetings} color={colors.categoryPersonal} onPress={() => navigation.navigate('Calendar')} />
               </ScrollView>
             )}
 
@@ -113,7 +113,7 @@ export function HomeScreen() {
             <Text style={styles.sectionLabel}>PENDING TASKS</Text>
           </View>
         }
-        renderItem={({ item }) => <TaskCard task={item} onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })} />}
+        renderItem={({ item, index }) => <TaskCard task={item} index={index} onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })} />}
         ListEmptyComponent={
           tasks.loading ? <Loading /> : <EmptyState icon="checkmark-done-circle-outline" title="Nothing pending" subtitle="You're all caught up. Tap + NEW TASK to add one." />
         }

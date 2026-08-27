@@ -5,41 +5,45 @@
 // Every component reads these tokens, so the palette below re-skins the app.
 
 export const colors = {
-  bg: '#0B0B0F', // near-black, faint violet undertone (not flat #000)
-  surface: '#16161C', // cards
-  surfaceElevated: '#1F1F28', // raised elements (sheets, inputs, active tiles)
-  border: '#2A2A33', // hairline
-  textPrimary: '#F5F5F7',
-  textSecondary: '#9A9AA6',
-  textMuted: '#6B6B76',
+  // Softer than a pure black/white split — CRED-dark reads calm, not harsh.
+  // The bg/surface gap is gentle and the "white" text is a dimmed off-white so
+  // nothing glares; depth comes from layering, not stark contrast.
+  bg: '#0F0F14', // lifted near-black (not flat #000, not glaring)
+  surface: '#17171E', // cards — a soft step above bg
+  surfaceElevated: '#20202A', // raised elements (sheets, inputs, active tiles)
+  border: '#262630', // quiet hairline — low contrast against surface
+  textPrimary: '#E6E6EC', // dimmed off-white (not #FFF — reduces glare)
+  textSecondary: '#94949F',
+  textMuted: '#61616B',
 
-  // Signature accent — a rich violet, used sparingly (primary actions, active
-  // states, the priority "coin"). brandDark is the indigo end used for the
-  // pseudo-gradient shading; brandSoft is a low-opacity tint for dark chips.
-  brand: '#8B5CF6',
+  // Signature accent — a rich but not neon violet, used sparingly (primary
+  // actions, active states, the priority "coin"). brandDark is the indigo end
+  // for shading; brandSoft is a low-opacity tint for dark chips.
+  brand: '#8B7CF6',
   brandDark: '#6366F1',
-  brandSoft: 'rgba(139,92,246,0.16)',
+  brandSoft: 'rgba(139,124,246,0.15)',
 
-  success: '#34D399',
-  successSoft: 'rgba(52,211,153,0.15)',
-  warning: '#FBBF24',
-  warningSoft: 'rgba(251,191,36,0.15)',
-  danger: '#FF6B6B',
-  dangerSoft: 'rgba(255,107,107,0.15)',
+  success: '#45C08A',
+  successSoft: 'rgba(69,192,138,0.14)',
+  warning: '#E7B15C',
+  warningSoft: 'rgba(231,177,92,0.14)',
+  danger: '#EA7A7A',
+  dangerSoft: 'rgba(234,122,122,0.14)',
 
-  // Priority accents — tuned for legibility on dark
-  p1: '#FF6B6B',
-  p1Soft: 'rgba(255,107,107,0.15)',
-  p2: '#FBBF24',
-  p2Soft: 'rgba(251,191,36,0.15)',
-  p3: '#34D399',
-  p3Soft: 'rgba(52,211,153,0.15)',
+  // Priority accents — desaturated a touch so the palette is harmonious on
+  // dark rather than a high-contrast rainbow.
+  p1: '#EA7A7A',
+  p1Soft: 'rgba(234,122,122,0.14)',
+  p2: '#E7B15C',
+  p2Soft: 'rgba(231,177,92,0.14)',
+  p3: '#45C08A',
+  p3Soft: 'rgba(69,192,138,0.14)',
 
-  // Category accents — brighter on dark so pills read clearly
+  // Category accents — muted jewel tones, legible but not glaring
   categoryPersonal: '#A78BFA',
-  categoryOfficial: '#60A5FA',
-  categoryTravel: '#34D399',
-  categoryUrgent: '#FF6B6B',
+  categoryOfficial: '#6B9BE8',
+  categoryTravel: '#45C08A',
+  categoryUrgent: '#EA7A7A',
 
   overlay: 'rgba(0,0,0,0.66)',
   white: '#FFFFFF',
