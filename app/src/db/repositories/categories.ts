@@ -42,7 +42,20 @@ export async function ensureDefaultCategories(): Promise<void> {
 
 export async function listCategories(): Promise<TaskCategory[]> {
   const db = await getDb();
-  return db.getAllAsync<TaskCategory>('SELECT * FROM task_categories ORDER BY sort_order ASC, name ASC');
+  // Collapse duplicate DEFAULT categories by name to a single chip. Each device
+  // seeds its own Personal/Official/Travel/Urgent with a random id, so once the
+  // shared workspace syncs, every member pulls the others' four defaults and
+  // would otherwise see two of each ("Personal", "Personal", ...). Keeping one
+  // row per default name (deterministically, the smallest id) hides the visual
+  // duplication without a data migration — tasks still resolve their own
+  // category_id by id, and category chips filter by name, so nothing breaks.
+  // Custom (non-default) categories are never deduped.
+  return db.getAllAsync<TaskCategory>(
+    `SELECT * FROM task_categories
+     WHERE is_default = 0
+        OR id IN (SELECT MIN(id) FROM task_categories WHERE is_default = 1 GROUP BY name)
+     ORDER BY sort_order ASC, name ASC`
+  );
 }
 
 export async function createCategory(name: string, colorHex: string, icon: string): Promise<TaskCategory> {
