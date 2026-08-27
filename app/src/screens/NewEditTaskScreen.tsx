@@ -305,56 +305,12 @@ export function NewEditTaskScreen() {
           </View>
         </View>
 
-        <Row isWide={isWide}>
-          <Field flex={1}>
-            <LabeledInput
-              label="Assigned To"
-              icon="person-outline"
-              accentColor={fieldAccents.assignedTo.color}
-              value={assignedTo}
-              onChangeText={setAssignedTo}
-              placeholder="e.g. Rajni"
-            />
-          </Field>
-          <Field flex={1}>
-            <LabeledInput
-              label="Company"
-              icon="business-outline"
-              accentColor={fieldAccents.company.color}
-              value={contactCompany}
-              onChangeText={setContactCompany}
-              placeholder="e.g. Redcliffe Labs"
-            />
-          </Field>
-        </Row>
-
-        <Row isWide={isWide}>
-          <Field flex={1}>
-            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
-          </Field>
-          <Field flex={1}>
-            {canUseLocalNotifications ? (
-              <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
-            ) : isWeb && webNotificationsSupported ? (
-              <>
-                <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
-                <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
-              </>
-            ) : (
-              <Text style={styles.hint}>available in the phone app</Text>
-            )}
-          </Field>
-        </Row>
-
         {!isEdit && (
-          <LabeledInput
-            label="Remarks"
-            value={remark}
-            onChangeText={setRemark}
-            placeholder="Add an initial note (optional)"
-            multiline
-            numberOfLines={2}
-            style={{ minHeight: 76, textAlignVertical: 'top' }}
+          <AttachmentsSection
+            taskId={null}
+            attachments={[]}
+            pendingAttachments={pendingAttachments}
+            onPendingAttachmentsChange={setPendingAttachments}
           />
         )}
 
@@ -415,12 +371,56 @@ export function NewEditTaskScreen() {
           </View>
         )}
 
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <LabeledInput
+              label="Assigned To"
+              icon="person-outline"
+              accentColor={fieldAccents.assignedTo.color}
+              value={assignedTo}
+              onChangeText={setAssignedTo}
+              placeholder="e.g. Rajni"
+            />
+          </Field>
+          <Field flex={1}>
+            <LabeledInput
+              label="Company"
+              icon="business-outline"
+              accentColor={fieldAccents.company.color}
+              value={contactCompany}
+              onChangeText={setContactCompany}
+              placeholder="e.g. Redcliffe Labs"
+            />
+          </Field>
+        </Row>
+
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
+          </Field>
+          <Field flex={1}>
+            {canUseLocalNotifications ? (
+              <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+            ) : isWeb && webNotificationsSupported ? (
+              <>
+                <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+                <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
+              </>
+            ) : (
+              <Text style={styles.hint}>available in the phone app</Text>
+            )}
+          </Field>
+        </Row>
+
         {!isEdit && (
-          <AttachmentsSection
-            taskId={null}
-            attachments={[]}
-            pendingAttachments={pendingAttachments}
-            onPendingAttachmentsChange={setPendingAttachments}
+          <LabeledInput
+            label="Remarks"
+            value={remark}
+            onChangeText={setRemark}
+            placeholder="Add an initial note (optional)"
+            multiline
+            numberOfLines={2}
+            style={{ minHeight: 76, textAlignVertical: 'top' }}
           />
         )}
 
