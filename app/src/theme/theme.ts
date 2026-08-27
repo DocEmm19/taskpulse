@@ -75,13 +75,8 @@ export const radius = {
 };
 
 // Bigger, tighter, more confident than a stock scale — CRED's personality is
-// largely in the type. fontFamily is filled in once Space Grotesk loads
-// (see App.tsx / theme/fonts.ts); undefined falls back to the system sans.
-export const fonts = {
-  display: undefined as string | undefined, // set to 'SpaceGrotesk_700Bold' after load
-  displayBold: undefined as string | undefined, // 'SpaceGrotesk_600SemiBold'
-};
-
+// largely in the type. display/h1/h2 carry the Space Grotesk fontFamily (loaded
+// in App.tsx); if the font fails to load the app proceeds on the system sans.
 export const typography = {
   // Display + headings use Space Grotesk (loaded in App.tsx) for CRED-style
   // geometric character; body/captions stay on the system sans. The font

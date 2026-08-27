@@ -31,7 +31,10 @@ export default function App() {
   const [showApp, setShowApp] = useState<boolean | null>(null);
   const hydrate = useSessionStore((s) => s.hydrate);
   const setSupabaseUserId = useSessionStore((s) => s.setSupabaseUserId);
-  const [fontsLoaded] = useFonts({ SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
+  // fontError is honored too: if the font asset ever fails to load (404 under
+  // the Pages base path, FontFace failure), we proceed on system fonts rather
+  // than hanging on the splash forever.
+  const [fontsLoaded, fontError] = useFonts({ SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold });
 
   useEffect(() => {
     (async () => {
@@ -98,7 +101,7 @@ export default function App() {
     );
   }
 
-  if (!ready || showApp === null || !fontsLoaded) {
+  if (!ready || showApp === null || (!fontsLoaded && !fontError)) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.brand} />

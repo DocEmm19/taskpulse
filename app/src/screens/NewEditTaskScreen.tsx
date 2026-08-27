@@ -353,9 +353,13 @@ export function NewEditTaskScreen() {
 
         <Text style={styles.label}>Add more</Text>
         <View style={styles.chipsWrap}>
-          {OPTIONAL_SECTIONS.map((s) => (
-            <Chip key={s.key} label={`+ ${s.label}`} selected={expanded.has(s.key)} onPress={() => toggleSection(s.key)} />
-          ))}
+          {OPTIONAL_SECTIONS
+            // Contact is create-only (contact creation is gated to !isEdit), so
+            // don't offer the chip on edit where its input would be discarded.
+            .filter((s) => !(isEdit && s.key === 'contact'))
+            .map((s) => (
+              <Chip key={s.key} label={`+ ${s.label}`} selected={expanded.has(s.key)} onPress={() => toggleSection(s.key)} />
+            ))}
         </View>
 
         {expanded.has('booking') && (
@@ -371,7 +375,7 @@ export function NewEditTaskScreen() {
             />
           </View>
         )}
-        {expanded.has('contact') && (
+        {!isEdit && expanded.has('contact') && (
           <View style={styles.subSection}>
             <LabeledInput label="Contact Name" value={contactName} onChangeText={setContactName} placeholder="Optional — defaults to Assigned To" />
             <LabeledInput label="Mobile Number" value={contactMobile} onChangeText={setContactMobile} keyboardType="phone-pad" />
