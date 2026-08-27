@@ -106,7 +106,12 @@ export async function linkContactToTask(taskId: string, contactId: string): Prom
 
 export async function unlinkContactFromTask(taskId: string, contactId: string): Promise<void> {
   const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string }>('SELECT id FROM task_contacts WHERE task_id = ? AND contact_id = ?', [taskId, contactId]);
   await db.runAsync('DELETE FROM task_contacts WHERE task_id = ? AND contact_id = ?', [taskId, contactId]);
+  // Targeted cloud delete + parent touch so the unlink propagates and doesn't
+  // resurrect on the next pull (see deleteTaskEmail in taskExtras).
+  if (row?.id) await enqueueSync('task_contact', row.id, 'DELETE');
+  await touchParentTask(db, taskId);
   notifyTablesChanged(['task_contacts']);
 }
 

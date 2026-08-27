@@ -195,7 +195,12 @@ async function processQueueItem(item: SyncQueueItem) {
   } else if (DIRECT_TABLES[item.entity_type]) {
     await pushDirectRow(DIRECT_TABLES[item.entity_type], item.entity_id, item.operation);
   } else if (TASK_CHILD_TABLES[item.entity_type]) {
-    await pushTaskChildren(TASK_CHILD_TABLES[item.entity_type], item.entity_id);
+    // DELETE carries the ROW id (targeted); CREATE/UPDATE carry the TASK id (set resync).
+    if (item.operation === 'DELETE') {
+      await pushTaskChildDelete(TASK_CHILD_TABLES[item.entity_type], item.entity_id);
+    } else {
+      await pushTaskChildren(TASK_CHILD_TABLES[item.entity_type], item.entity_id);
+    }
   }
 
   await db.runAsync(`DELETE FROM sync_queue WHERE id = ?`, [item.id]);
@@ -227,35 +232,29 @@ async function pushDirectRow(table: string, id: string, operation: SyncQueueItem
   }
 }
 
-/** PostgREST value list for a NOT-IN filter over text/uuid ids, quoted so
- * hyphenated UUIDs parse. Returns null when there are no local ids (the caller
- * then deletes ALL of the task's cloud child rows). Exported + unit-tested
- * because a malformed filter here could delete the wrong rows. */
-export function childDeleteNotInList(localIds: string[]): string | null {
-  if (localIds.length === 0) return null;
-  return `(${localIds.map((id) => `"${String(id).replace(/"/g, '')}"`).join(',')})`;
-}
-
 async function pushTaskChildren(table: string, taskId: string) {
   const supabase = getSupabase();
   if (!supabase) return;
   const db = await getDb();
   const rows = await db.getAllAsync<Record<string, unknown>>(`SELECT * FROM ${table} WHERE task_id = ?`, [taskId]);
-  if (rows.length > 0) {
-    const { error } = await supabase.from(table).upsert(rows.map((row) => sanitizeRow(row, table)));
-    if (error) throw error;
-  }
-  // Mirror local deletions to the cloud. Upsert alone can't remove a row the
-  // user deleted locally, so without this a deleted link/email/contact stays
-  // in the cloud and RESURRECTS on the next pull (which delete+reinserts the
-  // task's whole child set from the cloud). Always scoped by task_id.
-  // ponytail: last-writer-wins over a task's child SET — a concurrent add on
-  // another device inside the same sync window can be dropped. Fine for this
-  // workspace size; upgrade path = per-row tombstones if it ever bites.
-  const notIn = childDeleteNotInList(rows.map((r) => String(r.id)));
-  let q = supabase.from(table).delete().eq('task_id', taskId);
-  if (notIn) q = q.not('id', 'in', notIn);
-  const { error } = await q;
+  if (rows.length === 0) return;
+  // Upsert-only, deliberately. This runs on EVERY child add/edit (queue items
+  // are keyed by task, not row), so it must never delete — a set-mirror here
+  // would delete a peer's concurrently-added row this device hasn't pulled yet.
+  // Deletions go through pushTaskChildDelete (targeted by row id) instead.
+  const { error } = await supabase.from(table).upsert(rows.map((row) => sanitizeRow(row, table)));
+  if (error) throw error;
+}
+
+/** Targeted delete of ONE child row from the cloud (task_emails/task_links/
+ * task_contacts — all keyed by their own id). Scoped to the exact id, so a
+ * concurrent add of a DIFFERENT row on another device is never touched. This
+ * is why child deletes are queued per-row (operation 'DELETE', entity_id =
+ * the row id), not folded into the task's set resync. */
+async function pushTaskChildDelete(table: string, rowId: string) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const { error } = await supabase.from(table).delete().eq('id', rowId);
   if (error) throw error;
 }
 
