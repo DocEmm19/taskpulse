@@ -24,6 +24,14 @@ export interface WebVideoCaptureResult {
   fileSizeBytes: number | null;
 }
 
+// Grace period before a window-refocus is treated as a cancel. Long on purpose:
+// for video, the browser can take several seconds after the camera closes to
+// copy a large recording into the input's FileList, so a short timer would
+// declare "cancelled" and silently drop a real recording. `change` is the
+// authoritative signal; this is only the true-cancel fallback. Exported so the
+// test can drive it deterministically.
+export const CANCEL_GRACE_MS = 15000;
+
 /** Maps a captured video's MIME type to a file extension for persistLocalFile. */
 export function videoExtensionFor(mimeType: string): string {
   const m = mimeType.toLowerCase();
@@ -54,18 +62,19 @@ export function captureVideoWeb(): Promise<WebVideoCaptureResult | null> {
     input.style.display = 'none';
 
     let settled = false;
-    const finish = (result: WebVideoCaptureResult | null) => {
+    const resolveWith = (result: WebVideoCaptureResult | null) => {
       if (settled) return;
       settled = true;
       input.remove();
       resolve(result);
     };
 
-    input.onchange = () => {
-      const file = input.files?.[0] ?? null;
-      if (!file) return finish(null);
+    const resolveFile = (file: File) => {
+      // Guard BEFORE createObjectURL so a losing/late branch never mints a
+      // blob: URL that then leaks unrevoked for the life of the page.
+      if (settled) return;
       const mimeType = file.type || 'video/mp4';
-      finish({
+      resolveWith({
         uri: URL.createObjectURL(file),
         mimeType,
         fileName: file.name || `video_${Date.now()}.${videoExtensionFor(mimeType)}`,
@@ -73,12 +82,28 @@ export function captureVideoWeb(): Promise<WebVideoCaptureResult | null> {
       });
     };
 
-    // Cancel detection: if the user backs out, `change` never fires but the
-    // window regains focus. Resolve null then — delayed so a real selection's
-    // `change` (which fires on return from the camera) wins the race.
+    // `change` is authoritative: a real selection always fires it (with the
+    // file); an empty FileList means the user cancelled from the chooser.
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) resolveFile(file);
+      else resolveWith(null);
+    };
+
+    // True-cancel fallback. Backing out of the camera refocuses the window
+    // WITHOUT firing `change` — but so does a successful capture, and for video
+    // `change` can land seconds later while the browser copies a large file
+    // into the FileList. So never guess-cancel on a short timer (that silently
+    // drops real recordings). Wait CANCEL_GRACE_MS, and even then cancel only
+    // if no file has arrived — otherwise `change` owns the result.
     window.addEventListener(
       'focus',
-      () => setTimeout(() => finish(null), 1000),
+      () =>
+        setTimeout(() => {
+          if (settled) return;
+          if (input.files && input.files.length > 0) return; // a selection landed; onchange will resolve it
+          resolveWith(null);
+        }, CANCEL_GRACE_MS),
       { once: true }
     );
 
