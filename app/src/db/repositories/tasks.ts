@@ -34,10 +34,18 @@ export interface NewTaskInput {
 }
 
 const TASK_SELECT = `
-  SELECT t.*, c.name as category_name, c.color_hex as category_color, c.icon as category_icon
+  SELECT t.*,
+         COALESCE(c.name, 'Task') as category_name,
+         COALESCE(c.color_hex, '#8E8E93') as category_color,
+         c.icon as category_icon
   FROM tasks t
-  JOIN task_categories c ON c.id = t.category_id
+  LEFT JOIN task_categories c ON c.id = t.category_id
 `;
+// LEFT JOIN, not INNER: a task synced from another device can arrive slightly
+// before its category row does. An inner join dropped such a task from every
+// list (while the category-less COUNT tiles still counted it — the "1 P2 shown
+// but no task visible" bug), making synced tasks look lost. With the left join
+// the task always shows; category_name/color fall back until the category syncs.
 
 export async function createTask(input: NewTaskInput): Promise<TaskWithCategory> {
   const db = await getDb();
