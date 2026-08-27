@@ -19,6 +19,7 @@ import { Attachment, AttachmentType } from '../types/models';
 import { addAttachment, deleteAttachment, renameAttachment } from '../db/repositories/attachments';
 import { canUseCamera, canRecordAudio, isWeb } from '../lib/platform';
 import { startWebRecording, webRecordingSupported, WebRecordingHandle } from '../lib/webAudioRecorder';
+import { captureVideoWeb, webVideoCaptureSupported, videoExtensionFor } from '../lib/webVideoCapture';
 import { newId } from '../lib/uuid';
 import { PendingAttachment, pendingToAttachment } from '../lib/pendingAttachments';
 import { colors, radius, spacing, typography } from '../theme/theme';
@@ -200,6 +201,20 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
     await addOrQueueAttachment({ fileType: 'video', fileName: `video_${Date.now()}.mp4`, localPath, durationSeconds: asset.duration ? Math.round(asset.duration / 1000) : null, mimeType: 'video/mp4' });
   }
 
+  // Web camera video: opens the OS camera (mobile) via a native capture input
+  // for live video+audio recording — the web counterpart to native recordVideo
+  // above. See lib/webVideoCapture.ts for why capture-input over MediaRecorder.
+  async function recordVideoWebFlow() {
+    try {
+      const res = await captureVideoWeb();
+      if (!res) return; // user cancelled
+      const localPath = await persistLocalFile(res.uri, videoExtensionFor(res.mimeType));
+      await addOrQueueAttachment({ fileType: 'video', fileName: res.fileName, localPath, fileSizeBytes: res.fileSizeBytes, mimeType: res.mimeType });
+    } catch (err) {
+      Alert.alert('Could not record video', err instanceof Error ? err.message : undefined);
+    }
+  }
+
   function confirmDelete(att: Attachment) {
     const isPending = pendingIds.has(att.id);
     const message = `Delete "${att.file_name}"?`;
@@ -278,8 +293,11 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
             {canRecordAudio && <SheetRow icon="mic-outline" label="Record Audio" onPress={() => runAttach(startRecording)} />}
             {isWeb && webRecordingSupported && <SheetRow icon="mic-outline" label="Record Audio" onPress={() => runAttach(startWebRecordingFlow)} />}
             {canUseCamera && <SheetRow icon="videocam-outline" label="Record Video" onPress={() => runAttach(recordVideo)} />}
+            {isWeb && webVideoCaptureSupported && <SheetRow icon="videocam-outline" label="Record Video" onPress={() => runAttach(recordVideoWebFlow)} />}
             <SheetRow icon="film-outline" label="Video File" onPress={() => runAttach(pickVideo)} />
-            {(!canUseCamera || !canRecordAudio) && <Text style={styles.empty}>Camera and native audio recording are available in the phone app.</Text>}
+            {isWeb ? (
+              <Text style={styles.empty}>Record Video and Record Audio use your device camera and mic. Take Photo is available in the phone app.</Text>
+            ) : null}
           </Pressable>
         </Pressable>
       </Modal>
