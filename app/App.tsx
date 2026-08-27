@@ -16,7 +16,7 @@ import { isSupabaseConfigured, getSupabase } from './src/lib/sync/supabaseClient
 import { getSupabaseSessionUserId } from './src/lib/sync/auth';
 import { shouldShowAppAfterGate } from './src/lib/authGate';
 import { isWeb } from './src/lib/platform';
-import { claimLocalDataForUser } from './src/db/claimOwnership';
+import { claimLocalDataForUser, adoptOrphanCategoriesForUser } from './src/db/claimOwnership';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { AuthGateScreen } from './src/screens/AuthGateScreen';
 import { colors } from './src/theme/theme';
@@ -72,6 +72,12 @@ export default function App() {
     const existingUserId = await getSupabaseSessionUserId();
     if (existingUserId) {
       setSupabaseUserId(existingUserId);
+      // Already-signed-in devices skip the sign-in gate (and thus
+      // claimLocalDataForUser), so legacy NULL-owned default categories would
+      // never get adopted here — and every task push would keep failing the
+      // category foreign key. Run the idempotent orphan-adoption sweep on every
+      // such boot so those categories reach the cloud and tasks can sync.
+      await adoptOrphanCategoriesForUser(existingUserId).catch(() => {});
       setShowApp(true);
       return;
     }

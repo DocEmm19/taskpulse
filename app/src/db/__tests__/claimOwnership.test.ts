@@ -12,7 +12,7 @@ jest.mock('../database', () => ({
 }));
 
 import { getDb } from '../database';
-import { claimLocalDataForUser } from '../claimOwnership';
+import { claimLocalDataForUser, adoptOrphanCategoriesForUser } from '../claimOwnership';
 
 const mockedGetDb = getDb as jest.MockedFunction<typeof getDb>;
 
@@ -101,5 +101,34 @@ describe('claimLocalDataForUser (Task 10 fix)', () => {
     await claimLocalDataForUser('same-id', 'same-id');
 
     expect(calls).toHaveLength(0);
+  });
+});
+
+describe('adoptOrphanCategoriesForUser (already-signed-in boot path)', () => {
+  test('adopts NULL-owned categories and re-queues them with INSERT OR REPLACE (idempotent)', async () => {
+    const { db, calls } = makeFakeDb({
+      'FROM task_categories WHERE created_by IS NULL': [{ id: 'default-personal' }, { id: 'default-official' }],
+    });
+    mockedGetDb.mockResolvedValue(db as any);
+
+    await adoptOrphanCategoriesForUser('supabase-user');
+
+    const adopt = calls.find((c) => c.sql.includes('UPDATE task_categories SET created_by') && c.sql.includes('created_by IS NULL'));
+    expect(adopt).toBeDefined();
+    expect(adopt!.params).toEqual(['supabase-user', expect.any(String)]);
+
+    const queued = calls.filter((c) => c.sql.includes('INSERT OR REPLACE INTO sync_queue') && c.sql.includes("'task_category'"));
+    expect(queued).toHaveLength(2);
+    expect(queued.map((c) => c.params[1])).toEqual(['default-personal', 'default-official']);
+  });
+
+  test('no-op (no writes) when there are no NULL-owned categories', async () => {
+    const { db, calls } = makeFakeDb({ 'FROM task_categories WHERE created_by IS NULL': [] });
+    mockedGetDb.mockResolvedValue(db as any);
+
+    await adoptOrphanCategoriesForUser('supabase-user');
+
+    expect(calls.find((c) => c.sql.includes('UPDATE task_categories'))).toBeUndefined();
+    expect(calls.find((c) => c.sql.includes('INSERT OR REPLACE INTO sync_queue'))).toBeUndefined();
   });
 });
