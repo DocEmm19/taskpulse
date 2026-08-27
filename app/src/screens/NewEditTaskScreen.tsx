@@ -334,10 +334,10 @@ export function NewEditTaskScreen() {
           </Field>
           <Field flex={1}>
             {canUseLocalNotifications ? (
-              <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+              <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
             ) : isWeb && webNotificationsSupported ? (
               <>
-                <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+                <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
                 <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
               </>
             ) : (
