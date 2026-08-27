@@ -51,6 +51,7 @@ export const TABLE_COLUMNS: Record<DirectCloudTable, readonly string[]> = {
     'priority',
     'status',
     'assigned_to_name',
+    'assigned_to_email',
     'assigned_to_contact_id',
     'created_by',
     'pending_since',
@@ -79,7 +80,7 @@ export const TABLE_COLUMNS: Record<DirectCloudTable, readonly string[]> = {
     'updated_at',
     'deleted_at',
   ],
-  task_categories: ['id', 'name', 'color_hex', 'icon', 'is_default', 'sort_order', 'created_by', 'created_at', 'updated_at'],
+  task_categories: ['id', 'name', 'color_hex', 'icon', 'is_default', 'sort_order', 'created_by', 'created_at', 'updated_at', 'deleted_at'],
   attachments: [
     'id',
     'task_id',

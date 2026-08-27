@@ -1,43 +1,59 @@
-// Central design tokens. Keep the whole app's look-and-feel defined in one place
-// so it stays consistent and can be re-themed without touching every screen.
+// Central design tokens — the whole app's look lives here so it can be
+// re-themed without touching screens. This is the "TaskPulse × CRED" dark
+// system: matte near-black surfaces, layered charcoal cards with hairline
+// borders, a restrained violet→indigo accent, and a big confident type scale.
+// Every component reads these tokens, so the palette below re-skins the app.
 
 export const colors = {
-  bg: '#F5F6F8',
-  surface: '#FFFFFF',
-  border: '#E4E7EC',
-  textPrimary: '#101828',
-  textSecondary: '#475467',
-  textMuted: '#98A2B3',
+  // Softer than a pure black/white split — CRED-dark reads calm, not harsh.
+  // The bg/surface gap is gentle and the "white" text is a dimmed off-white so
+  // nothing glares; depth comes from layering, not stark contrast.
+  bg: '#0F0F14', // lifted near-black (not flat #000, not glaring)
+  surface: '#17171E', // cards — a soft step above bg
+  surfaceElevated: '#20202A', // raised elements (sheets, inputs, active tiles)
+  border: '#262630', // quiet hairline — low contrast against surface
+  textPrimary: '#E6E6EC', // dimmed off-white (not #FFF — reduces glare)
+  textSecondary: '#94949F',
+  textMuted: '#61616B',
 
-  brand: '#2452E8',
-  brandDark: '#1936A8',
-  brandSoft: '#EAF0FF',
+  // Signature accent — a rich but not neon violet, used sparingly (primary
+  // actions, active states, the priority "coin"). brandDark is the indigo end
+  // for shading; brandSoft is a low-opacity tint for dark chips.
+  brand: '#8B7CF6',
+  brandDark: '#6366F1',
+  brandSoft: 'rgba(139,124,246,0.15)',
 
-  success: '#12B76A',
-  successSoft: '#E7F8EF',
-  warning: '#F79009',
-  warningSoft: '#FFF6E9',
-  danger: '#F04438',
-  dangerSoft: '#FEECEB',
+  success: '#45C08A',
+  successSoft: 'rgba(69,192,138,0.14)',
+  warning: '#E7B15C',
+  warningSoft: 'rgba(231,177,92,0.14)',
+  danger: '#EA7A7A',
+  dangerSoft: 'rgba(234,122,122,0.14)',
 
-  // Priority accents
-  p1: '#D92D20',
-  p1Soft: '#FEECEB',
-  p2: '#F79009',
-  p2Soft: '#FFF6E9',
-  p3: '#12879C',
-  p3Soft: '#E6F6F9',
+  // Priority accents — desaturated a touch so the palette is harmonious on
+  // dark rather than a high-contrast rainbow.
+  p1: '#EA7A7A',
+  p1Soft: 'rgba(234,122,122,0.14)',
+  p2: '#E7B15C',
+  p2Soft: 'rgba(231,177,92,0.14)',
+  p3: '#45C08A',
+  p3Soft: 'rgba(69,192,138,0.14)',
 
-  // Category accents
-  categoryPersonal: '#7A5AF8',
-  categoryOfficial: '#2452E8',
-  categoryTravel: '#12B76A',
-  categoryUrgent: '#F04438',
+  // Category accents — muted jewel tones, legible but not glaring
+  categoryPersonal: '#A78BFA',
+  categoryOfficial: '#6B9BE8',
+  categoryTravel: '#45C08A',
+  categoryUrgent: '#EA7A7A',
 
-  overlay: 'rgba(16, 24, 40, 0.5)',
+  overlay: 'rgba(0,0,0,0.66)',
   white: '#FFFFFF',
   black: '#000000',
 };
+
+// Accent gradient stops (violet → indigo). expo-linear-gradient isn't a dep, so
+// most surfaces use the solid `brand`; these are here for any place that can
+// paint a gradient (e.g. web CSS) and to keep the two ends named in one spot.
+export const accentGradient = ['#A78BFA', '#6366F1'];
 
 export const spacing = {
   xxs: 2,
@@ -51,37 +67,56 @@ export const spacing = {
 };
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
+  sm: 10,
+  md: 14,
+  lg: 18,
+  xl: 22,
   pill: 999,
 };
 
-export const typography = {
-  display: { fontSize: 26, fontWeight: '700' as const, lineHeight: 32 },
-  h1: { fontSize: 20, fontWeight: '700' as const, lineHeight: 26 },
-  h2: { fontSize: 17, fontWeight: '600' as const, lineHeight: 22 },
-  body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 21 },
-  bodyMedium: { fontSize: 15, fontWeight: '600' as const, lineHeight: 21 },
-  caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
-  captionMedium: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },
-  tiny: { fontSize: 11, fontWeight: '600' as const, lineHeight: 14 },
+// Bigger, tighter, more confident than a stock scale — CRED's personality is
+// largely in the type. fontFamily is filled in once Space Grotesk loads
+// (see App.tsx / theme/fonts.ts); undefined falls back to the system sans.
+export const fonts = {
+  display: undefined as string | undefined, // set to 'SpaceGrotesk_700Bold' after load
+  displayBold: undefined as string | undefined, // 'SpaceGrotesk_600SemiBold'
 };
 
+export const typography = {
+  display: { fontSize: 30, fontWeight: '800' as const, lineHeight: 36, letterSpacing: -0.6 },
+  h1: { fontSize: 22, fontWeight: '700' as const, lineHeight: 28, letterSpacing: -0.3 },
+  h2: { fontSize: 17, fontWeight: '600' as const, lineHeight: 23, letterSpacing: -0.1 },
+  body: { fontSize: 15, fontWeight: '400' as const, lineHeight: 22 },
+  bodyMedium: { fontSize: 15, fontWeight: '600' as const, lineHeight: 22 },
+  caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
+  captionMedium: { fontSize: 13, fontWeight: '600' as const, lineHeight: 18 },
+  tiny: { fontSize: 11, fontWeight: '700' as const, lineHeight: 14, letterSpacing: 0.4 },
+};
+
+// On dark, shadows read faintly — depth comes mostly from the hairline border
+// and a soft violet-tinted glow on accented elements. Keep a subtle card lift.
 export const shadow = {
   card: {
-    shadowColor: '#101828',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 3,
   },
   floating: {
-    shadowColor: '#101828',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  // Soft violet glow for the primary action / priority coin — the one place
+  // the accent is allowed to bloom.
+  glow: {
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
     elevation: 6,
   },
 };
@@ -105,21 +140,19 @@ export const statusMeta: Record<StatusKey, { label: string; color: string; soft:
   pending: { label: 'Pending', color: colors.warning, soft: colors.warningSoft },
   in_progress: { label: 'In Progress', color: colors.brand, soft: colors.brandSoft },
   completed: { label: 'Completed', color: colors.success, soft: colors.successSoft },
-  on_hold: { label: 'On Hold', color: colors.textMuted, soft: colors.border },
-  cancelled: { label: 'Cancelled', color: colors.textMuted, soft: colors.border },
-  reassigned: { label: 'Reassigned', color: colors.categoryPersonal, soft: '#F1EDFE' },
+  on_hold: { label: 'On Hold', color: colors.textMuted, soft: 'rgba(255,255,255,0.06)' },
+  cancelled: { label: 'Cancelled', color: colors.textMuted, soft: 'rgba(255,255,255,0.06)' },
+  reassigned: { label: 'Reassigned', color: colors.categoryPersonal, soft: 'rgba(167,139,250,0.16)' },
 };
 
-// Subtle per-field-group accents for the New Task screen's compact layout
-// (New Task screen redesign). Purely additive — nothing above this reads or
-// depends on these keys, so no existing screen's look changes.
+// Per-field accents for the New Task screen — tuned to the dark palette.
 export const fieldAccents = {
   title: { color: colors.brand, soft: colors.brandSoft },
   priority: { color: colors.warning, soft: colors.warningSoft },
-  assignedTo: { color: '#7A5AF8', soft: '#F1EDFE' },
+  assignedTo: { color: colors.categoryPersonal, soft: 'rgba(167,139,250,0.16)' },
   company: { color: colors.success, soft: colors.successSoft },
-  dueDate: { color: colors.brand, soft: colors.brandSoft },
-  reminder: { color: '#0D9488', soft: '#E6F6F5' },
+  dueDate: { color: colors.categoryOfficial, soft: 'rgba(96,165,250,0.16)' },
+  reminder: { color: '#2DD4BF', soft: 'rgba(45,212,191,0.16)' },
 };
 
 export const categoryIconFallback: Record<string, string> = {
@@ -127,4 +160,5 @@ export const categoryIconFallback: Record<string, string> = {
   Official: 'briefcase-outline',
   Travel: 'airplane-outline',
   Urgent: 'alert-circle-outline',
+  Network: 'people-outline',
 };

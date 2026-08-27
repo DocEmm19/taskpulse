@@ -102,7 +102,7 @@ export function TasksListScreen() {
         data={tasks.data ?? []}
         keyExtractor={(t) => t.id}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => <TaskCard task={item} onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })} />}
+        renderItem={({ item, index }) => <TaskCard task={item} index={index} onPress={() => navigation.navigate('TaskDetail', { taskId: item.id })} />}
         ListEmptyComponent={
           tasks.loading ? <Loading /> : <EmptyState icon="search-outline" title="No tasks match" subtitle="Try adjusting your search or filters." />
         }

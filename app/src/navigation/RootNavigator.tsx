@@ -30,7 +30,7 @@ function TabsWithFab() {
 
 export function RootNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerTitleStyle: { fontWeight: '700' }, headerTintColor: colors.textPrimary }}>
+    <Stack.Navigator screenOptions={{ headerTitleStyle: { fontWeight: '700' }, headerTintColor: colors.textPrimary, headerStyle: { backgroundColor: colors.surface }, headerShadowVisible: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Screen name="Tabs" component={TabsWithFab} options={{ headerShown: false }} />
       <Stack.Screen name="TaskDetail" component={TaskDetailScreen} options={{ title: 'Task' }} />
       <Stack.Screen name="NewTask" component={NewEditTaskScreen} options={{ title: 'New Task', presentation: 'modal' }} />

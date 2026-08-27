@@ -203,7 +203,11 @@ async function pushDirectRow(table: string, id: string, operation: SyncQueueItem
   const db = await getDb();
 
   if (operation === 'DELETE') {
-    await supabase.from(table).update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    // Check the error like the upsert path below — otherwise a failed cloud
+    // delete (e.g. a missing column, transient error) is swallowed, the queue
+    // item is consumed as "done", and the deletion never propagates or retries.
+    const { error } = await supabase.from(table).update({ deleted_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
     return;
   }
 

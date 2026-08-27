@@ -35,6 +35,13 @@ export const EXTRA_COLUMNS: { table: string; column: string; type: string }[] = 
   { table: 'task_categories', column: 'updated_at', type: 'TEXT' },
   { table: 'attachments', column: 'updated_at', type: 'TEXT' },
   { table: 'calendar_events', column: 'updated_at', type: 'TEXT' },
+  // Remove-category: categories now soft-delete (deleted_at) like tasks, so the
+  // removal syncs cross-device via the existing DELETE path. Cloud needs the
+  // matching `alter table public.task_categories add column deleted_at timestamptz`.
+  { table: 'task_categories', column: 'deleted_at', type: 'TEXT' },
+  // Assignee email (for the later Gmail-send phase). Cloud needs the matching
+  // `alter table public.tasks add column assigned_to_email text`.
+  { table: 'tasks', column: 'assigned_to_email', type: 'TEXT' },
 ];
 
 /** Additive, idempotent "add column if missing" migration — used for columns

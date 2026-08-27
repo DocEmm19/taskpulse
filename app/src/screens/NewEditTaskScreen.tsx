@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -35,8 +35,9 @@ function webAlert(title: string, message?: string) {
   }
 }
 
-type Section = 'contact' | 'email' | 'website' | 'meeting_link' | 'location' | 'meeting' | 'travel';
+type Section = 'contact' | 'email' | 'website' | 'meeting_link' | 'location' | 'meeting' | 'travel' | 'booking';
 const OPTIONAL_SECTIONS: Array<{ key: Section; label: string; icon: string }> = [
+  { key: 'booking', label: 'Booking request', icon: 'cart-outline' },
   { key: 'contact', label: 'Contact', icon: 'person-add-outline' },
   { key: 'email', label: 'Email', icon: 'mail-outline' },
   { key: 'website', label: 'Website', icon: 'link-outline' },
@@ -45,6 +46,9 @@ const OPTIONAL_SECTIONS: Array<{ key: Section; label: string; icon: string }> = 
   { key: 'meeting', label: 'Schedule', icon: 'time-outline' },
   { key: 'travel', label: 'Travel', icon: 'airplane-outline' },
 ];
+
+// What Gaurav most often books — surfaced as quick toggles inside Travel.
+const TRAVEL_BOOKINGS = ['Flights', 'Hotel', 'Taxi', 'Meetings'];
 
 export function NewEditTaskScreen() {
   const navigation = useNavigation<any>();
@@ -60,7 +64,8 @@ export function NewEditTaskScreen() {
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [priority, setPriority] = useState<Priority>('P2');
-  const [assignedTo, setAssignedTo] = useState('');
+  const [assignedTo, setAssignedTo] = useState(isEdit ? '' : 'Gaurav'); // default assignee
+  const [assigneeEmail, setAssigneeEmail] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [reminderAt, setReminderAt] = useState<Date | null>(null);
   const [remark, setRemark] = useState('');
@@ -86,6 +91,16 @@ export function NewEditTaskScreen() {
   const [returnDate, setReturnDate] = useState<Date | null>(null);
   const [purpose, setPurpose] = useState('');
   const [hotelName, setHotelName] = useState('');
+  const [bookingNote, setBookingNote] = useState('');
+  const [travelBookings, setTravelBookings] = useState<Set<string>>(new Set());
+
+  function toggleTravelBooking(item: string) {
+    setTravelBookings((prev) => {
+      const next = new Set(prev);
+      next.has(item) ? next.delete(item) : next.add(item);
+      return next;
+    });
+  }
 
   const selectedCategoryName = categories.data?.find((c) => c.id === categoryId)?.name;
   const isTravelCategory = selectedCategoryName === 'Travel';
@@ -112,6 +127,7 @@ export function NewEditTaskScreen() {
       setCategoryId(await canonicalCategoryId(full.task.category_id));
       setPriority(full.task.priority);
       setAssignedTo(full.task.assigned_to_name ?? '');
+      setAssigneeEmail(full.task.assigned_to_email ?? '');
       setDueDate(full.task.due_date ? new Date(full.task.due_date) : null);
       setReminderAt(full.task.reminder_at ? new Date(full.task.reminder_at) : null);
       if (full.travel) {
@@ -147,18 +163,30 @@ export function NewEditTaskScreen() {
           categoryId,
           priority,
           assignedToName: assignedTo || null,
+          assignedToEmail: assigneeEmail.trim() || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
         });
       } else {
+        // Fold the free-text remark, a booking request, and any travel "to book"
+        // toggles into the task's first note so they persist and sync (no extra
+        // schema needed — the assistant sees them right on the task).
+        const noteLines: string[] = [];
+        if (remark.trim()) noteLines.push(remark.trim());
+        if (expanded.has('booking') && bookingNote.trim()) noteLines.push(`Booking request: ${bookingNote.trim()}`);
+        if (expanded.has('travel')) {
+          const toBook = TRAVEL_BOOKINGS.filter((b) => travelBookings.has(b));
+          if (toBook.length) noteLines.push(`To book: ${toBook.join(', ')}`);
+        }
         const created = await createTask({
           title,
           categoryId,
           priority,
           assignedToName: assignedTo || null,
+          assignedToEmail: assigneeEmail.trim() || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
-          initialRemark: remark || null,
+          initialRemark: noteLines.length ? noteLines.join('\n') : null,
         });
         taskId = created.id;
 
@@ -254,6 +282,15 @@ export function NewEditTaskScreen() {
 
   // Compact header action (desktop/tablet especially) so Create Task /
   // Save Changes doesn't require scrolling to the bottom of a long form.
+  // Keep a ref to the latest handleSave so the header button never fires a
+  // stale closure. Previously the header's onPress captured whatever handleSave
+  // existed when setOptions last ran, and the dep array didn't list every field
+  // (assignee email, booking note, travel toggles, add-more fields) — so a value
+  // typed just before tapping the header button could be silently dropped. The
+  // ref is reassigned every render, so onPress always calls the current save.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
   // The full-width button at the bottom of the form is left in place too —
   // this is purely additive, same handleSave, same disabled/label logic.
   useLayoutEffect(() => {
@@ -263,13 +300,12 @@ export function NewEditTaskScreen() {
           <SecondaryButton
             label={saving ? 'Saving...' : isEdit ? 'Save' : 'Create Task'}
             icon="checkmark-circle"
-            onPress={handleSave}
+            onPress={() => handleSaveRef.current()}
           />
         </View>
       ),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, saving, isEdit, title, categoryId, priority, assignedTo, dueDate, reminderAt, remark, contactCompany, contactName, contactMobile, pendingAttachments]);
+  }, [navigation, saving, isEdit]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -305,56 +341,12 @@ export function NewEditTaskScreen() {
           </View>
         </View>
 
-        <Row isWide={isWide}>
-          <Field flex={1}>
-            <LabeledInput
-              label="Assigned To"
-              icon="person-outline"
-              accentColor={fieldAccents.assignedTo.color}
-              value={assignedTo}
-              onChangeText={setAssignedTo}
-              placeholder="e.g. Rajni"
-            />
-          </Field>
-          <Field flex={1}>
-            <LabeledInput
-              label="Company"
-              icon="business-outline"
-              accentColor={fieldAccents.company.color}
-              value={contactCompany}
-              onChangeText={setContactCompany}
-              placeholder="e.g. Redcliffe Labs"
-            />
-          </Field>
-        </Row>
-
-        <Row isWide={isWide}>
-          <Field flex={1}>
-            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
-          </Field>
-          <Field flex={1}>
-            {canUseLocalNotifications ? (
-              <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
-            ) : isWeb && webNotificationsSupported ? (
-              <>
-                <DateTimeField label="Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
-                <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
-              </>
-            ) : (
-              <Text style={styles.hint}>available in the phone app</Text>
-            )}
-          </Field>
-        </Row>
-
         {!isEdit && (
-          <LabeledInput
-            label="Remarks"
-            value={remark}
-            onChangeText={setRemark}
-            placeholder="Add an initial note (optional)"
-            multiline
-            numberOfLines={2}
-            style={{ minHeight: 76, textAlignVertical: 'top' }}
+          <AttachmentsSection
+            taskId={null}
+            attachments={[]}
+            pendingAttachments={pendingAttachments}
+            onPendingAttachmentsChange={setPendingAttachments}
           />
         )}
 
@@ -365,6 +357,19 @@ export function NewEditTaskScreen() {
           ))}
         </View>
 
+        {expanded.has('booking') && (
+          <View style={styles.subSection}>
+            <LabeledInput
+              label="What to book"
+              value={bookingNote}
+              onChangeText={setBookingNote}
+              placeholder="e.g. Flight to Mumbai 12 Sep morning, cab to airport"
+              multiline
+              numberOfLines={2}
+              style={{ minHeight: 64, textAlignVertical: 'top' }}
+            />
+          </View>
+        )}
         {expanded.has('contact') && (
           <View style={styles.subSection}>
             <LabeledInput label="Contact Name" value={contactName} onChangeText={setContactName} placeholder="Optional — defaults to Assigned To" />
@@ -401,6 +406,12 @@ export function NewEditTaskScreen() {
         )}
         {expanded.has('travel') && (
           <View style={styles.subSection}>
+            <Text style={styles.label}>To book</Text>
+            <View style={styles.chipsWrap}>
+              {TRAVEL_BOOKINGS.map((b) => (
+                <Chip key={b} label={b} selected={travelBookings.has(b)} onPress={() => toggleTravelBooking(b)} />
+              ))}
+            </View>
             <Text style={styles.label}>City</Text>
             <View style={styles.chipsWrap}>
               {CITY_OPTIONS.map((c) => (
@@ -415,12 +426,67 @@ export function NewEditTaskScreen() {
           </View>
         )}
 
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <LabeledInput
+              label="Assigned To"
+              icon="person-outline"
+              accentColor={fieldAccents.assignedTo.color}
+              value={assignedTo}
+              onChangeText={setAssignedTo}
+              placeholder="e.g. Rajni"
+            />
+          </Field>
+          <Field flex={1}>
+            <LabeledInput
+              label="Company"
+              icon="business-outline"
+              accentColor={fieldAccents.company.color}
+              value={contactCompany}
+              onChangeText={setContactCompany}
+              placeholder="e.g. Redcliffe Labs"
+            />
+          </Field>
+        </Row>
+
+        <LabeledInput
+          label="Assignee Email (optional)"
+          icon="at-outline"
+          accentColor={fieldAccents.assignedTo.color}
+          value={assigneeEmail}
+          onChangeText={setAssigneeEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholder="name@company.com — used to email the task later"
+        />
+
+        <Row isWide={isWide}>
+          <Field flex={1}>
+            <DateTimeField label="Due Date" value={dueDate} onChange={setDueDate} mode="date" accentColor={fieldAccents.dueDate.color} />
+          </Field>
+          <Field flex={1}>
+            {canUseLocalNotifications ? (
+              <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+            ) : isWeb && webNotificationsSupported ? (
+              <>
+                <DateTimeField label="Self Reminder" value={reminderAt} onChange={setReminderAt} mode="datetime" placeholder="No reminder set" accentColor={fieldAccents.reminder.color} />
+                <Text style={styles.hint}>Web reminders are best-effort and may not fire if this tab is closed (especially on iPhone).</Text>
+              </>
+            ) : (
+              <Text style={styles.hint}>available in the phone app</Text>
+            )}
+          </Field>
+        </Row>
+
         {!isEdit && (
-          <AttachmentsSection
-            taskId={null}
-            attachments={[]}
-            pendingAttachments={pendingAttachments}
-            onPendingAttachmentsChange={setPendingAttachments}
+          <LabeledInput
+            label="Remarks"
+            value={remark}
+            onChangeText={setRemark}
+            placeholder="Add an initial note (optional)"
+            multiline
+            numberOfLines={2}
+            style={{ minHeight: 76, textAlignVertical: 'top' }}
           />
         )}
 

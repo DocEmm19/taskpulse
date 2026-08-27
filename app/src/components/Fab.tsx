@@ -12,7 +12,7 @@ export function NewTaskFab() {
   return (
     <Pressable
       onPress={() => navigation.navigate('NewTask')}
-      style={({ pressed }) => [styles.fab, pressed && { opacity: 0.9 }]}
+      style={({ pressed }) => [styles.fab, { transform: [{ scale: pressed ? 0.95 : 1 }] }, pressed && { opacity: 0.95 }]}
       accessibilityLabel="Create new task"
     >
       <Ionicons name="add" size={22} color={colors.white} />
@@ -33,7 +33,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    ...shadow.floating,
+    ...shadow.glow, // violet bloom — the one place the accent is allowed to glow
   },
   label: { ...typography.bodyMedium, color: colors.white, letterSpacing: 0.3 },
 });

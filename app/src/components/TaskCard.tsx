@@ -1,5 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { TaskWithCategory } from '../types/models';
@@ -10,13 +11,17 @@ import { daysOverdue, daysPending, isOverdue } from '../db/repositories/tasks';
 interface Props {
   task: TaskWithCategory;
   onPress: () => void;
+  /** List position — drives a subtle staggered entrance (capped so long lists
+   * don't wait). Defaults to 0 for callers that render a single card. */
+  index?: number;
 }
 
-export function TaskCard({ task, onPress }: Props) {
+export function TaskCard({ task, onPress, index = 0 }: Props) {
   const overdue = isOverdue(task);
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <Animated.View entering={FadeInDown.duration(320).delay(Math.min(index, 8) * 45)}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, { transform: [{ scale: pressed ? 0.985 : 1 }] }, pressed && styles.pressed]}>
       <View style={[styles.stripe, { backgroundColor: task.category_color }]} />
       <View style={styles.body}>
         <View style={styles.topRow}>
@@ -48,6 +53,7 @@ export function TaskCard({ task, onPress }: Props) {
         </View>
       </View>
     </Pressable>
+    </Animated.View>
   );
 }
 

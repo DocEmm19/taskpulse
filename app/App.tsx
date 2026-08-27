@@ -4,11 +4,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 
 import { getDb } from './src/db/database';
-import { ensureDefaultCategories } from './src/db/repositories/categories';
+import { ensureDefaultCategories, ensureNetworkCategoryOnce } from './src/db/repositories/categories';
 import { purgeSeedDataOnce } from './src/db/seed';
 import { useSessionStore } from './src/store/sessionStore';
 import { startSyncEngine } from './src/lib/sync/syncEngine';
@@ -36,7 +36,8 @@ export default function App() {
       try {
         await hydrate(); // local user/device identity (AsyncStorage) — see sessionStore.ts
         await getDb(); // opens SQLite + runs CREATE TABLE migrations — see db/database.ts
-        await ensureDefaultCategories(); // Personal/Official/Travel/Urgent (Req. #4)
+        await ensureDefaultCategories(); // Personal/Official/Travel/Urgent/Network
+        await ensureNetworkCategoryOnce(); // backfill Network on pre-existing installs
         await purgeSeedDataOnce(); // one-time clean slate (replaces demo seeding)
         await resolveCloudGate();
         startSyncEngine(); // no-op until Supabase credentials are configured — see SUPABASE_SETUP.md
@@ -126,8 +127,21 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <StatusBar style="dark" />
+        <NavigationContainer
+          theme={{
+            ...DarkTheme,
+            colors: {
+              ...DarkTheme.colors,
+              primary: colors.brand,
+              background: colors.bg,
+              card: colors.surface,
+              text: colors.textPrimary,
+              border: colors.border,
+              notification: colors.brand,
+            },
+          }}
+        >
+          <StatusBar style="light" />
           <RootNavigator />
         </NavigationContainer>
       </SafeAreaProvider>
