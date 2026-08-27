@@ -34,7 +34,13 @@ export async function getEmailsForTask(taskId: string): Promise<TaskEmail[]> {
 }
 export async function deleteTaskEmail(id: string): Promise<void> {
   const db = await getDb();
+  const row = await db.getFirstAsync<{ task_id: string }>('SELECT task_id FROM task_emails WHERE id = ?', [id]);
   await db.runAsync('DELETE FROM task_emails WHERE id = ?', [id]);
+  // Propagate the delete: targeted per-row cloud delete + bump the parent so
+  // other devices re-pull this task's children (and thus drop the row too).
+  // Without this the row stays in the cloud and resurrects on the next pull.
+  await enqueueSync('task_email', id, 'DELETE');
+  if (row?.task_id) await touchParentTask(db, row.task_id);
   notifyTablesChanged('task_emails');
 }
 
@@ -59,7 +65,10 @@ export async function getLinksForTask(taskId: string): Promise<TaskLink[]> {
 }
 export async function deleteTaskLink(id: string): Promise<void> {
   const db = await getDb();
+  const row = await db.getFirstAsync<{ task_id: string }>('SELECT task_id FROM task_links WHERE id = ?', [id]);
   await db.runAsync('DELETE FROM task_links WHERE id = ?', [id]);
+  await enqueueSync('task_link', id, 'DELETE'); // targeted cloud delete (see deleteTaskEmail)
+  if (row?.task_id) await touchParentTask(db, row.task_id);
   notifyTablesChanged('task_links');
 }
 

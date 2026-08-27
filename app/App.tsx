@@ -114,6 +114,7 @@ export default function App() {
 
   if (!showApp) {
     return (
+      <ErrorBoundary>
       <AuthGateScreen
         onSignedIn={async (userId, name) => {
           const localUserId = useSessionStore.getState().userId;
@@ -129,6 +130,7 @@ export default function App() {
           setShowApp(true);
         }}
       />
+      </ErrorBoundary>
     );
   }
 
