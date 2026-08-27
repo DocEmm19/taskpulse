@@ -20,6 +20,7 @@ import { isWeb } from './src/lib/platform';
 import { claimLocalDataForUser, adoptOrphanCategoriesForUser } from './src/db/claimOwnership';
 import { useFonts, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { AuthGateScreen } from './src/screens/AuthGateScreen';
 import { colors } from './src/theme/theme';
 
@@ -149,7 +150,9 @@ export default function App() {
           }}
         >
           <StatusBar style="light" />
-          <RootNavigator />
+          <ErrorBoundary>
+            <RootNavigator />
+          </ErrorBoundary>
         </NavigationContainer>
       </SafeAreaProvider>
     </GestureHandlerRootView>
