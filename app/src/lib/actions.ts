@@ -35,6 +35,10 @@ export function openEmail(address: string, subject?: string, body?: string) {
   Linking.openURL(`mailto:${address}${query ? `?${query}` : ''}`).catch(() => Alert.alert('Could not open mail app'));
 }
 
+// buildTaskEmail lives in the leaf module ./taskEmail (zero imports → unit-testable);
+// re-exported here so callers can keep importing mail helpers from one place.
+export { buildTaskEmail } from './taskEmail';
+
 export function openWebLink(url: string) {
   const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
   Linking.openURL(normalized).catch(() => Alert.alert('Could not open link', normalized));
