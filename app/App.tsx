@@ -12,7 +12,7 @@ import { ensureDefaultCategories } from './src/db/repositories/categories';
 import { seedDemoDataIfNeeded } from './src/db/seed';
 import { useSessionStore } from './src/store/sessionStore';
 import { startSyncEngine } from './src/lib/sync/syncEngine';
-import { isSupabaseConfigured } from './src/lib/sync/supabaseClient';
+import { isSupabaseConfigured, getSupabase } from './src/lib/sync/supabaseClient';
 import { getSupabaseSessionUserId } from './src/lib/sync/auth';
 import { shouldShowAppAfterGate } from './src/lib/authGate';
 import { isWeb } from './src/lib/platform';
@@ -46,6 +46,23 @@ export default function App() {
       }
     })();
   }, [hydrate]);
+
+  // When the Supabase session ends (the Sign Out button on Home calls
+  // supabase.auth.signOut()), drop straight back to the sign-in gate. Centralised
+  // here so the button itself only has to end the session — it doesn't need
+  // access to this component's showApp state.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setSupabaseUserId(null);
+        setShowApp(false);
+      }
+    });
+    return () => data.subscription.unsubscribe();
+  }, [setSupabaseUserId]);
 
   async function resolveCloudGate() {
     if (!isSupabaseConfigured()) {

@@ -2,6 +2,7 @@ import { getDb } from '../database';
 import { newId } from '../../lib/uuid';
 import { notifyTablesChanged } from '../events';
 import { nowIso, enqueueSync } from '../helpers';
+import { getCurrentUserId } from '../../store/sessionStore';
 import { TaskCategory } from '../../types/models';
 import { colors } from '../../theme/theme';
 
@@ -19,12 +20,22 @@ export async function ensureDefaultCategories(): Promise<void> {
   const count = await db.getFirstAsync<{ c: number }>('SELECT COUNT(*) as c FROM task_categories');
   if (count && count.c > 0) return;
   const now = nowIso();
+  // Own the defaults with this device's current user id (local id pre-sign-in;
+  // reattributed to the real Supabase id by claimLocalDataForUser on sign-in)
+  // and queue them to sync. Previously these were seeded with created_by = NULL
+  // and never enqueued, so they never reached the cloud — and since
+  // tasks.category_id is a NOT NULL foreign key to task_categories, EVERY task
+  // push was rejected by the cloud (FK violation) and silently retried forever,
+  // which is why nothing synced once cloud sync was turned on.
+  const ownerId = getCurrentUserId();
   for (const cat of DEFAULTS) {
+    const id = newId();
     await db.runAsync(
       `INSERT INTO task_categories (id, name, color_hex, icon, is_default, sort_order, created_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-      [newId(), cat.name, cat.color_hex, cat.icon, cat.is_default, cat.sort_order, now, now]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, cat.name, cat.color_hex, cat.icon, cat.is_default, cat.sort_order, ownerId, now, now]
     );
+    await enqueueSync('task_category', id, 'CREATE', { name: cat.name, color_hex: cat.color_hex, icon: cat.icon });
   }
   notifyTablesChanged('task_categories');
 }

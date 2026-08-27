@@ -72,6 +72,28 @@ describe('claimLocalDataForUser (Task 10 fix)', () => {
     expect(attachmentQueueRows[0].params[1]).toBe('att-1');
   });
 
+  test('adopts NULL-owned legacy default categories so they can sync (root cause of tasks never pushing)', async () => {
+    // Older builds seeded Personal/Official/Travel/Urgent with created_by = NULL
+    // and never queued them, so they never reached the cloud — and because
+    // tasks.category_id is a NOT NULL FK to task_categories, every task push was
+    // rejected on the FK and silently retried forever. The fix adopts those
+    // NULL-owned rows under the signed-in user so they satisfy RLS and re-queue.
+    const { db, calls } = makeFakeDb({
+      'FROM task_categories WHERE created_by': [{ id: 'default-personal' }],
+    });
+    mockedGetDb.mockResolvedValue(db as any);
+
+    await claimLocalDataForUser('local-old-id', 'supabase-new-id');
+
+    const nullAdopt = calls.find((c) => c.sql.includes('UPDATE task_categories SET created_by') && c.sql.includes('created_by IS NULL'));
+    expect(nullAdopt).toBeDefined();
+    expect(nullAdopt!.params).toEqual(['supabase-new-id', expect.any(String)]);
+
+    // The now-adopted default category is re-queued for push like any other.
+    const queued = calls.filter((c) => c.sql.includes('INSERT INTO sync_queue') && c.sql.includes("'task_category'"));
+    expect(queued.map((c) => c.params[1])).toContain('default-personal');
+  });
+
   test('no-op when oldLocalUserId equals newSupabaseUserId', async () => {
     const { db, calls } = makeFakeDb({});
     mockedGetDb.mockResolvedValue(db as any);

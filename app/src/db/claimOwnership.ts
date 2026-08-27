@@ -32,6 +32,16 @@ export async function claimLocalDataForUser(oldLocalUserId: string, newSupabaseU
       now,
       oldLocalUserId,
     ]);
+    // Legacy default categories (older builds seeded Personal/Official/Travel/
+    // Urgent with created_by = NULL and never queued them) are owned by no one,
+    // so the rewrite above — keyed on the old local id — misses them entirely.
+    // Adopt those NULL-owned rows too, or they never reach the cloud and every
+    // task's category foreign key keeps failing on push. The re-queue below
+    // (WHERE created_by = newSupabaseUserId) then picks them up.
+    await db.runAsync(`UPDATE task_categories SET created_by = ?, updated_at = ? WHERE created_by IS NULL`, [
+      newSupabaseUserId,
+      now,
+    ]);
     await db.runAsync(`UPDATE contacts SET created_by = ? WHERE created_by = ?`, [newSupabaseUserId, oldLocalUserId]);
     await db.runAsync(`UPDATE task_remarks SET author_id = ? WHERE author_id = ?`, [newSupabaseUserId, oldLocalUserId]);
     await db.runAsync(`UPDATE task_reassignments SET changed_by = ? WHERE changed_by = ?`, [newSupabaseUserId, oldLocalUserId]);
