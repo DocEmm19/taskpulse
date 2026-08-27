@@ -35,8 +35,9 @@ function webAlert(title: string, message?: string) {
   }
 }
 
-type Section = 'contact' | 'email' | 'website' | 'meeting_link' | 'location' | 'meeting' | 'travel';
+type Section = 'contact' | 'email' | 'website' | 'meeting_link' | 'location' | 'meeting' | 'travel' | 'booking';
 const OPTIONAL_SECTIONS: Array<{ key: Section; label: string; icon: string }> = [
+  { key: 'booking', label: 'Booking request', icon: 'cart-outline' },
   { key: 'contact', label: 'Contact', icon: 'person-add-outline' },
   { key: 'email', label: 'Email', icon: 'mail-outline' },
   { key: 'website', label: 'Website', icon: 'link-outline' },
@@ -45,6 +46,9 @@ const OPTIONAL_SECTIONS: Array<{ key: Section; label: string; icon: string }> = 
   { key: 'meeting', label: 'Schedule', icon: 'time-outline' },
   { key: 'travel', label: 'Travel', icon: 'airplane-outline' },
 ];
+
+// What Gaurav most often books — surfaced as quick toggles inside Travel.
+const TRAVEL_BOOKINGS = ['Flights', 'Hotel', 'Taxi', 'Meetings'];
 
 export function NewEditTaskScreen() {
   const navigation = useNavigation<any>();
@@ -86,6 +90,16 @@ export function NewEditTaskScreen() {
   const [returnDate, setReturnDate] = useState<Date | null>(null);
   const [purpose, setPurpose] = useState('');
   const [hotelName, setHotelName] = useState('');
+  const [bookingNote, setBookingNote] = useState('');
+  const [travelBookings, setTravelBookings] = useState<Set<string>>(new Set());
+
+  function toggleTravelBooking(item: string) {
+    setTravelBookings((prev) => {
+      const next = new Set(prev);
+      next.has(item) ? next.delete(item) : next.add(item);
+      return next;
+    });
+  }
 
   const selectedCategoryName = categories.data?.find((c) => c.id === categoryId)?.name;
   const isTravelCategory = selectedCategoryName === 'Travel';
@@ -151,6 +165,16 @@ export function NewEditTaskScreen() {
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
         });
       } else {
+        // Fold the free-text remark, a booking request, and any travel "to book"
+        // toggles into the task's first note so they persist and sync (no extra
+        // schema needed — the assistant sees them right on the task).
+        const noteLines: string[] = [];
+        if (remark.trim()) noteLines.push(remark.trim());
+        if (expanded.has('booking') && bookingNote.trim()) noteLines.push(`Booking request: ${bookingNote.trim()}`);
+        if (expanded.has('travel')) {
+          const toBook = TRAVEL_BOOKINGS.filter((b) => travelBookings.has(b));
+          if (toBook.length) noteLines.push(`To book: ${toBook.join(', ')}`);
+        }
         const created = await createTask({
           title,
           categoryId,
@@ -158,7 +182,7 @@ export function NewEditTaskScreen() {
           assignedToName: assignedTo || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
-          initialRemark: remark || null,
+          initialRemark: noteLines.length ? noteLines.join('\n') : null,
         });
         taskId = created.id;
 
@@ -321,6 +345,19 @@ export function NewEditTaskScreen() {
           ))}
         </View>
 
+        {expanded.has('booking') && (
+          <View style={styles.subSection}>
+            <LabeledInput
+              label="What to book"
+              value={bookingNote}
+              onChangeText={setBookingNote}
+              placeholder="e.g. Flight to Mumbai 12 Sep morning, cab to airport"
+              multiline
+              numberOfLines={2}
+              style={{ minHeight: 64, textAlignVertical: 'top' }}
+            />
+          </View>
+        )}
         {expanded.has('contact') && (
           <View style={styles.subSection}>
             <LabeledInput label="Contact Name" value={contactName} onChangeText={setContactName} placeholder="Optional — defaults to Assigned To" />
@@ -357,6 +394,12 @@ export function NewEditTaskScreen() {
         )}
         {expanded.has('travel') && (
           <View style={styles.subSection}>
+            <Text style={styles.label}>To book</Text>
+            <View style={styles.chipsWrap}>
+              {TRAVEL_BOOKINGS.map((b) => (
+                <Chip key={b} label={b} selected={travelBookings.has(b)} onPress={() => toggleTravelBooking(b)} />
+              ))}
+            </View>
             <Text style={styles.label}>City</Text>
             <View style={styles.chipsWrap}>
               {CITY_OPTIONS.map((c) => (
