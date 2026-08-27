@@ -24,10 +24,12 @@ export function TabNavigator() {
     <Tab.Navigator
       screenOptions={({ route, navigation }) => ({
         headerShown: true,
-        headerTitleStyle: { fontWeight: '700' },
+        headerStyle: { backgroundColor: colors.surface },
+        headerShadowVisible: false,
+        headerTitleStyle: { fontWeight: '700', color: colors.textPrimary },
         tabBarActiveTintColor: colors.brand,
         tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 6 },
+        tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 6, backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color, size }) => {
           const icons = ICONS[route.name as keyof TabParamList];

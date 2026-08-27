@@ -4,7 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 
 import { getDb } from './src/db/database';
@@ -127,8 +127,21 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <NavigationContainer>
-          <StatusBar style="dark" />
+        <NavigationContainer
+          theme={{
+            ...DarkTheme,
+            colors: {
+              ...DarkTheme.colors,
+              primary: colors.brand,
+              background: colors.bg,
+              card: colors.surface,
+              text: colors.textPrimary,
+              border: colors.border,
+              notification: colors.brand,
+            },
+          }}
+        >
+          <StatusBar style="light" />
           <RootNavigator />
         </NavigationContainer>
       </SafeAreaProvider>
