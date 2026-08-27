@@ -15,4 +15,14 @@ describe('migrations', () => {
       expect(EXTRA_COLUMNS).toContainEqual({ table, column: 'updated_at', type: 'TEXT' });
     }
   );
+
+  // Remove-category: task_categories soft-deletes like tasks.
+  test('deleted_at is an ensured column on task_categories', () => {
+    expect(EXTRA_COLUMNS).toContainEqual({ table: 'task_categories', column: 'deleted_at', type: 'TEXT' });
+  });
+
+  // Assignee email (for the later Gmail-send phase).
+  test('assigned_to_email is an ensured column on tasks', () => {
+    expect(EXTRA_COLUMNS).toContainEqual({ table: 'tasks', column: 'assigned_to_email', type: 'TEXT' });
+  });
 });

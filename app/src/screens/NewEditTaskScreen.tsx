@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -282,6 +282,15 @@ export function NewEditTaskScreen() {
 
   // Compact header action (desktop/tablet especially) so Create Task /
   // Save Changes doesn't require scrolling to the bottom of a long form.
+  // Keep a ref to the latest handleSave so the header button never fires a
+  // stale closure. Previously the header's onPress captured whatever handleSave
+  // existed when setOptions last ran, and the dep array didn't list every field
+  // (assignee email, booking note, travel toggles, add-more fields) — so a value
+  // typed just before tapping the header button could be silently dropped. The
+  // ref is reassigned every render, so onPress always calls the current save.
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
   // The full-width button at the bottom of the form is left in place too —
   // this is purely additive, same handleSave, same disabled/label logic.
   useLayoutEffect(() => {
@@ -291,13 +300,12 @@ export function NewEditTaskScreen() {
           <SecondaryButton
             label={saving ? 'Saving...' : isEdit ? 'Save' : 'Create Task'}
             icon="checkmark-circle"
-            onPress={handleSave}
+            onPress={() => handleSaveRef.current()}
           />
         </View>
       ),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, saving, isEdit, title, categoryId, priority, assignedTo, dueDate, reminderAt, remark, contactCompany, contactName, contactMobile, pendingAttachments]);
+  }, [navigation, saving, isEdit]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
