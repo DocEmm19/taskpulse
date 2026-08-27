@@ -14,7 +14,7 @@ jest.mock('../../store/sessionStore', () => ({
 }));
 
 import { getDb } from '../database';
-import { listCategories } from '../repositories/categories';
+import { listCategories, canonicalCategoryId } from '../repositories/categories';
 
 const mockedGetDb = getDb as jest.MockedFunction<typeof getDb>;
 
@@ -43,5 +43,32 @@ describe('listCategories — default-category dedup', () => {
     // ...defaults are collapsed to one id per name.
     expect(sql).toMatch(/MIN\(id\).*WHERE is_default = 1.*GROUP BY name/);
     expect(sql).toMatch(/ORDER BY sort_order ASC, name ASC/);
+  });
+});
+
+describe('canonicalCategoryId — normalises a duplicate default to the shown one', () => {
+  function fakeDbFor(rowById: { name: string; is_default: number } | null, minId: string | null) {
+    return {
+      async getFirstAsync(sql: string) {
+        if (sql.includes('SELECT name, is_default')) return rowById;
+        if (sql.includes('MIN(id)')) return { id: minId };
+        return null;
+      },
+    };
+  }
+
+  test('a default duplicate id resolves to MIN(id) for its name', async () => {
+    mockedGetDb.mockResolvedValue(fakeDbFor({ name: 'Personal', is_default: 1 }, 'canonical-personal') as any);
+    expect(await canonicalCategoryId('losing-dup-id')).toBe('canonical-personal');
+  });
+
+  test('a custom category id is returned unchanged (never deduped)', async () => {
+    mockedGetDb.mockResolvedValue(fakeDbFor({ name: 'My Project', is_default: 0 }, 'irrelevant') as any);
+    expect(await canonicalCategoryId('custom-id')).toBe('custom-id');
+  });
+
+  test('an unknown id is returned unchanged', async () => {
+    mockedGetDb.mockResolvedValue(fakeDbFor(null, null) as any);
+    expect(await canonicalCategoryId('ghost-id')).toBe('ghost-id');
   });
 });

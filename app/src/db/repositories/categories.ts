@@ -58,6 +58,25 @@ export async function listCategories(): Promise<TaskCategory[]> {
   );
 }
 
+/** Map a (possibly duplicate) default category id to the one listCategories()
+ * actually shows for that name — the smallest id among same-named defaults.
+ * Custom categories and already-canonical ids are returned unchanged. Used on
+ * task edit so the selected category chip highlights correctly even when the
+ * task references a synced duplicate default that the deduped picker hides. */
+export async function canonicalCategoryId(id: string): Promise<string> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ name: string; is_default: number }>(
+    'SELECT name, is_default FROM task_categories WHERE id = ?',
+    [id]
+  );
+  if (!row || !row.is_default) return id;
+  const canon = await db.getFirstAsync<{ id: string | null }>(
+    'SELECT MIN(id) as id FROM task_categories WHERE is_default = 1 AND name = ?',
+    [row.name]
+  );
+  return canon?.id ?? id;
+}
+
 export async function createCategory(name: string, colorHex: string, icon: string): Promise<TaskCategory> {
   const db = await getDb();
   const id = newId();

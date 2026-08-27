@@ -6,7 +6,7 @@ import { Chip, LabeledInput, PrimaryButton, SecondaryButton } from '../component
 import { DateTimeField } from '../components/DateTimeField';
 import { AttachmentsSection, PendingAttachment } from '../components/AttachmentsSection';
 import { useLiveQuery } from '../db/useLiveQuery';
-import { listCategories } from '../db/repositories/categories';
+import { listCategories, canonicalCategoryId } from '../db/repositories/categories';
 import { createTask, updateTask } from '../db/repositories/tasks';
 import { addAttachment } from '../db/repositories/attachments';
 import { getTaskFull } from '../db/repositories/taskFull';
@@ -103,10 +103,13 @@ export function NewEditTaskScreen() {
 
   useEffect(() => {
     if (!editingTaskId) return;
-    getTaskFull(editingTaskId).then((full) => {
+    getTaskFull(editingTaskId).then(async (full) => {
       if (!full) return;
       setTitle(full.task.title);
-      setCategoryId(full.task.category_id);
+      // Normalise to the category the deduped picker actually shows for this
+      // name — a synced task may reference a duplicate default that
+      // listCategories() hides, which would otherwise leave no chip highlighted.
+      setCategoryId(await canonicalCategoryId(full.task.category_id));
       setPriority(full.task.priority);
       setAssignedTo(full.task.assigned_to_name ?? '');
       setDueDate(full.task.due_date ? new Date(full.task.due_date) : null);
