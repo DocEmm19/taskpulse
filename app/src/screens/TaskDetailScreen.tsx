@@ -11,9 +11,9 @@ import { getTaskFull } from '../db/repositories/taskFull';
 import { addRemark, daysOverdue, daysPending, isOverdue, updateTask, softDeleteTask } from '../db/repositories/tasks';
 import { unlinkContactFromTask } from '../db/repositories/contacts';
 import { deleteTaskEmail, deleteTaskLink } from '../db/repositories/taskExtras';
-import { callNumber, copyToClipboard, openEmail, openMaps, openWebLink, openWhatsApp, saveContactToDevice, shareTask } from '../lib/actions';
+import { buildTaskEmail, callNumber, copyToClipboard, openEmail, openMaps, openWebLink, openWhatsApp, saveContactToDevice, shareTask } from '../lib/actions';
 import { addEventToDeviceCalendar, addEventToDeviceCalendarWeb, openGoogleCalendarEvent } from '../lib/calendarIntegration';
-import { colors, spacing, typography } from '../theme/theme';
+import { colors, priorityMeta, spacing, typography } from '../theme/theme';
 
 /** react-native-web's `Alert.alert` is a no-op stub (confirmed: it renders
  * nothing and never invokes any button callback), so anything that needs to
@@ -132,6 +132,23 @@ export function TaskDetailScreen() {
     addEventToDeviceCalendarWeb(buildCalendarEventData());
   }
 
+  // Gmail-send (Phase A): open the sender's own mail app pre-filled with the
+  // task, addressed to the assignee. Only reachable when an assignee email was
+  // captured (button below is gated on task.assigned_to_email).
+  function handleEmailTask() {
+    const to = task.assigned_to_email?.trim();
+    if (!to) return;
+    const { subject, body } = buildTaskEmail({
+      title: task.title,
+      priorityLabel: priorityMeta[task.priority]?.label,
+      category: task.category_name,
+      assigneeName: task.assigned_to_name,
+      dueDateLabel: task.due_date ? format(new Date(task.due_date), 'dd-MMM-yyyy') : null,
+      note: remarks[0]?.body ?? null,
+    });
+    openEmail(to, subject, body);
+  }
+
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content}>
@@ -149,6 +166,13 @@ export function TaskDetailScreen() {
             <MetaItem label="Pending Since" value={`${format(new Date(task.pending_since), 'dd-MMM-yyyy')} (${daysPending(task.pending_since)}d)`} />
             {task.due_date && <MetaItem label="Due Date" value={format(new Date(task.due_date), 'dd-MMM-yyyy')} />}
           </View>
+          {task.assigned_to_email ? (
+            <SecondaryButton
+              label={`Email task to ${task.assigned_to_name ?? 'assignee'}`}
+              icon="mail-outline"
+              onPress={handleEmailTask}
+            />
+          ) : null}
         </View>
 
         {/* Remarks / Timeline */}
