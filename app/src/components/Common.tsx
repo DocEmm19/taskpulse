@@ -151,7 +151,9 @@ const styles = StyleSheet.create({
   },
   chipText: { ...typography.captionMedium, color: colors.textSecondary },
   primaryButton: {
-    backgroundColor: colors.brand,
+    // Deeper cobalt as the FILL so white label text clears WCAG AA (~5.2:1);
+    // bright `brand` stays the on-dark accent. See Fab.tsx for the same pairing.
+    backgroundColor: colors.brandDark,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     flexDirection: 'row',

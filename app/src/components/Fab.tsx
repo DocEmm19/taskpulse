@@ -12,7 +12,7 @@ export function NewTaskFab() {
   return (
     <Pressable
       onPress={() => navigation.navigate('NewTask')}
-      style={({ pressed }) => [styles.fab, { transform: [{ scale: pressed ? 0.95 : 1 }] }, pressed && { opacity: 0.95 }]}
+      style={({ pressed }) => [styles.fab, { transform: [{ scale: pressed ? 0.97 : 1 }] }, pressed && { opacity: 0.95 }]}
       accessibilityLabel="Create new task"
     >
       <Ionicons name="add" size={22} color={colors.white} />
@@ -26,14 +26,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.lg,
     bottom: 84,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.brandDark, // deeper cobalt fill → white label clears WCAG AA
     borderRadius: radius.pill,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    ...shadow.glow, // violet bloom — the one place the accent is allowed to glow
+    ...shadow.glow, // restrained cobalt bloom — the one place the accent glows
   },
   label: { ...typography.bodyMedium, color: colors.white, letterSpacing: 0.3 },
 });

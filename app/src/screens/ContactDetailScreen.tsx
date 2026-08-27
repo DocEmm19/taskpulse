@@ -4,7 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { LabeledInput, PrimaryButton, SecondaryButton } from '../components/Common';
 import { createContact, deleteContact, getContact, updateContact } from '../db/repositories/contacts';
 import { callNumber, copyToClipboard, openEmail, openWhatsApp, saveContactToDevice } from '../lib/actions';
-import { spacing } from '../theme/theme';
+import { colors, spacing } from '../theme/theme';
 
 export function ContactDetailScreen() {
   const navigation = useNavigation<any>();
@@ -77,7 +77,7 @@ export function ContactDetailScreen() {
 
       <View style={{ height: spacing.lg }} />
       <PrimaryButton label={saving ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Contact'} onPress={handleSave} disabled={saving} icon="checkmark" />
-      {isEdit && <SecondaryButton label="Delete Contact" icon="trash-outline" color="#F04438" onPress={handleDelete} />}
+      {isEdit && <SecondaryButton label="Delete Contact" icon="trash-outline" color={colors.danger} onPress={handleDelete} />}
     </ScrollView>
   );
 }

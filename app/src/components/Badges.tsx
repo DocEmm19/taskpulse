@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { priorityMeta, PriorityKey, radius, spacing, statusMeta, StatusKey, typography } from '../theme/theme';
+import { colors, priorityMeta, PriorityKey, radius, spacing, statusMeta, StatusKey, typography } from '../theme/theme';
 
 export function PriorityBadge({ priority }: { priority: PriorityKey }) {
   const meta = priorityMeta[priority];
@@ -30,9 +30,10 @@ export function CategoryPill({ name, color }: { name: string; color: string }) {
 
 export function OverdueBadge({ days }: { days: number }) {
   return (
-    <View style={[styles.pill, { backgroundColor: '#FEECEB' }]}>
-      <Text style={[styles.pillText, { color: '#D92D20' }]}>
-        🔴 Overdue by {days} {days === 1 ? 'Day' : 'Days'}
+    <View style={[styles.pill, styles.overdue, { backgroundColor: colors.dangerSoft }]}>
+      <View style={styles.overdueDot} />
+      <Text style={[styles.pillText, { color: colors.danger }]}>
+        Overdue by {days} {days === 1 ? 'day' : 'days'}
       </Text>
     </View>
   );
@@ -48,4 +49,6 @@ const styles = StyleSheet.create({
   pillText: {
     ...typography.tiny,
   },
+  overdue: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  overdueDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.danger },
 });

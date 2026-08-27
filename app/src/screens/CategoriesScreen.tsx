@@ -6,7 +6,10 @@ import { useLiveQuery } from '../db/useLiveQuery';
 import { createCategory, deleteCategory, listCategories } from '../db/repositories/categories';
 import { colors, radius, spacing, typography } from '../theme/theme';
 
-const SWATCHES = ['#2452E8', '#7A5AF8', '#12B76A', '#F04438', '#F79009', '#12879C', '#DB2777', '#6941C6'];
+// Cool, cohesive swatch set for the Ink & Cobalt palette — no violet/purple
+// (the AI-slop "LILA" tell) and no pure primaries. Cobalt leads; the rest are
+// desaturated, harmonious neighbours so any category chip sits calmly on ink.
+const SWATCHES = ['#3B82F6', '#5B8DEF', '#12879C', '#3FB98C', '#D8A24A', '#E5687A', '#8E9BB3', '#64748B'];
 
 export function CategoriesScreen() {
   const { data: categories } = useLiveQuery('task_categories', listCategories);
