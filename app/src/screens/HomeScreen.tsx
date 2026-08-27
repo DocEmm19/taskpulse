@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { format } from 'date-fns';
 import { ScreenContainer, EmptyState, Loading, Chip } from '../components/Common';
@@ -11,6 +11,8 @@ import { listCategories } from '../db/repositories/categories';
 import { listUpcomingMeetings, listCalendarEventsBetween } from '../db/repositories/taskExtras';
 import { colors, spacing, typography } from '../theme/theme';
 import { useSessionStore } from '../store/sessionStore';
+import { signOutSupabase } from '../lib/sync/auth';
+import { isSupabaseConfigured } from '../lib/sync/supabaseClient';
 import { Ionicons } from '@expo/vector-icons';
 
 function startEndOfToday() {
@@ -40,6 +42,22 @@ export function HomeScreen() {
 
   const categoryChips = ['All', ...(categories.data?.map((c) => c.name) ?? [])];
 
+  // Sign out is only meaningful on a cloud-synced (Supabase-configured) build;
+  // on a fully-offline build there's no session to end, so the button is hidden.
+  // App.tsx listens for Supabase's SIGNED_OUT event and returns to the sign-in
+  // gate, so this only needs to end the session.
+  function handleSignOut() {
+    const doIt = () => { signOutSupabase().catch(() => {}); };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Sign out of TaskPulse?')) doIt();
+    } else {
+      Alert.alert('Sign out', 'Sign out of TaskPulse?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: doIt },
+      ]);
+    }
+  }
+
   return (
     <ScreenContainer>
       <FlatList
@@ -50,8 +68,15 @@ export function HomeScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.header}>
-              <Text style={styles.greeting}>{greeting}, {userName}</Text>
-              <Text style={styles.dateText}>{format(new Date(), 'EEEE, dd MMMM yyyy')}</Text>
+              <View style={styles.headerText}>
+                <Text style={styles.greeting}>{greeting}, {userName}</Text>
+                <Text style={styles.dateText}>{format(new Date(), 'EEEE, dd MMMM yyyy')}</Text>
+              </View>
+              {isSupabaseConfigured() && (
+                <Pressable onPress={handleSignOut} hitSlop={10} style={styles.signOutBtn} accessibilityRole="button" accessibilityLabel="Sign out">
+                  <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
+                </Pressable>
+              )}
             </View>
 
             {counts.data && (
@@ -99,7 +124,9 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   listContent: { padding: spacing.lg, paddingBottom: 120 },
-  header: { marginBottom: spacing.lg },
+  header: { marginBottom: spacing.lg, flexDirection: 'row', alignItems: 'center' },
+  headerText: { flex: 1 },
+  signOutBtn: { padding: spacing.xs, borderRadius: 999, marginLeft: spacing.sm },
   greeting: { ...typography.display, color: colors.textPrimary },
   dateText: { ...typography.body, color: colors.textSecondary, marginTop: 2 },
   countsRow: { gap: spacing.sm, paddingBottom: spacing.md },
