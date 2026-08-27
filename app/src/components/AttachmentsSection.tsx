@@ -53,6 +53,7 @@ async function shareFile(att: Attachment) {
 
 export function AttachmentsSection({ taskId, attachments, pendingAttachments, onPendingAttachmentsChange }: Props) {
   const [preview, setPreview] = useState<Attachment | null>(null);
+  const [attachMenu, setAttachMenu] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [activeAudioId, setActiveAudioId] = useState<string | null>(null);
@@ -242,23 +243,46 @@ export function AttachmentsSection({ taskId, attachments, pendingAttachments, on
   const isRecording = recorderState.isRecording;
   const recordSeconds = Math.round((recorderState.durationMillis ?? 0) / 1000);
 
+  // Close the attachment sheet, then run the chosen picker/recorder.
+  function runAttach(fn: () => void) {
+    setAttachMenu(false);
+    fn();
+  }
+
   return (
     <SectionCard title="Attachments" icon="attach-outline">
       <View style={styles.actionsRow}>
-        {canUseCamera && <ActionButton icon="camera-outline" label="Photo" onPress={() => pickImage(true)} />}
-        <ActionButton icon="images-outline" label="Gallery" onPress={() => pickImage(false)} />
-        <ActionButton icon="document-attach-outline" label="PDF" onPress={pickPdf} />
-        {canRecordAudio && (
-          <ActionButton icon={isRecording ? 'stop-circle' : 'mic-outline'} label={isRecording ? `Stop (${recordSeconds}s)` : 'Record'} onPress={isRecording ? stopRecording : startRecording} danger={isRecording} />
+        {isRecording || isWebRecording ? (
+          // Recording is stateful, so it stays inline as a Stop control rather
+          // than hiding behind the sheet.
+          <ActionButton
+            icon="stop-circle"
+            label={isRecording ? `Stop (${recordSeconds}s)` : 'Stop'}
+            danger
+            onPress={isRecording ? stopRecording : stopWebRecordingFlow}
+          />
+        ) : (
+          <ActionButton icon="attach-outline" label="Attach" onPress={() => setAttachMenu(true)} />
         )}
-        {isWeb && webRecordingSupported && (
-          <ActionButton icon={isWebRecording ? 'stop-circle' : 'mic-outline'} label={isWebRecording ? 'Stop' : 'Record Audio'} onPress={isWebRecording ? stopWebRecordingFlow : startWebRecordingFlow} danger={isWebRecording} />
-        )}
-        {canUseCamera && <ActionButton icon="videocam-outline" label="Record Video" onPress={recordVideo} />}
-        <ActionButton icon="film-outline" label="Video File" onPress={pickVideo} />
       </View>
 
-      {(!canUseCamera || !canRecordAudio) && <Text style={styles.empty}>available in the phone app</Text>}
+      {/* One Attach button opens this sheet with every attachment type, instead
+          of a row of separate buttons. */}
+      <Modal visible={attachMenu} transparent animationType="slide" onRequestClose={() => setAttachMenu(false)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setAttachMenu(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Add attachment</Text>
+            {canUseCamera && <SheetRow icon="camera-outline" label="Take Photo" onPress={() => runAttach(() => pickImage(true))} />}
+            <SheetRow icon="images-outline" label="Gallery" onPress={() => runAttach(() => pickImage(false))} />
+            <SheetRow icon="document-attach-outline" label="PDF" onPress={() => runAttach(pickPdf)} />
+            {canRecordAudio && <SheetRow icon="mic-outline" label="Record Audio" onPress={() => runAttach(startRecording)} />}
+            {isWeb && webRecordingSupported && <SheetRow icon="mic-outline" label="Record Audio" onPress={() => runAttach(startWebRecordingFlow)} />}
+            {canUseCamera && <SheetRow icon="videocam-outline" label="Record Video" onPress={() => runAttach(recordVideo)} />}
+            <SheetRow icon="film-outline" label="Video File" onPress={() => runAttach(pickVideo)} />
+            {(!canUseCamera || !canRecordAudio) && <Text style={styles.empty}>Camera and native audio recording are available in the phone app.</Text>}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {displayAttachments.length === 0 ? (
         <Text style={styles.empty}>No attachments yet. Add a photo, PDF, voice note, or video above.</Text>
@@ -332,9 +356,19 @@ function VideoPreview({ uri }: { uri: string }) {
 
 function ActionButton({ icon, label, onPress, danger }: { icon: any; label: string; onPress: () => void; danger?: boolean }) {
   return (
-    <Pressable style={styles.actionButton} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.actionButton, { transform: [{ scale: pressed ? 0.96 : 1 }] }]} onPress={onPress}>
       <Ionicons name={icon} size={20} color={danger ? colors.danger : colors.brand} />
       <Text style={[styles.actionLabel, danger && { color: colors.danger }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/** One row in the "Add attachment" bottom sheet. */
+function SheetRow({ icon, label, onPress }: { icon: any; label: string; onPress: () => void }) {
+  return (
+    <Pressable style={({ pressed }) => [styles.sheetRow, pressed && { backgroundColor: colors.brandSoft }]} onPress={onPress}>
+      <Ionicons name={icon} size={20} color={colors.brand} />
+      <Text style={styles.sheetRowLabel}>{label}</Text>
     </Pressable>
   );
 }
@@ -351,6 +385,11 @@ const styles = StyleSheet.create({
   attachmentActions: { flexDirection: 'row', gap: spacing.sm, paddingLeft: spacing.sm },
   renameInput: { ...typography.body, color: colors.textPrimary, flex: 1, borderBottomWidth: 1, borderBottomColor: colors.brand },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', alignItems: 'center', justifyContent: 'center' },
+  sheetBackdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+  sheet: { backgroundColor: colors.surfaceElevated, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.xxs, borderTopWidth: 1, borderColor: colors.border },
+  sheetTitle: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, paddingHorizontal: spacing.sm, borderRadius: radius.md },
+  sheetRowLabel: { ...typography.body, color: colors.textPrimary },
   previewImage: { width: '100%', height: '80%' },
   previewVideo: { width: '100%', height: '50%' },
 });
