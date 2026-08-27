@@ -31,7 +31,17 @@ export function shouldApplyIncoming(
     return true;
   }
 
-  // Lexicographic string comparison (works for UTC ISO 8601 'Z' timestamps)
-  // Apply if incoming >= local (>=)
+  // Compare as parsed epoch millis, NOT as raw strings. The two sides can carry
+  // the SAME instant in DIFFERENT ISO formats — a local row written by the
+  // client uses `...Z` (Date.toISOString), while a row pulled from Supabase/
+  // PostgREST comes back as `...+00:00`. Lexicographically `+`(0x2B) < `Z`(0x5A),
+  // so a raw-string compare would wrongly reject an equal-or-newer incoming row
+  // whenever only the suffix differs. Date.parse handles both forms.
+  const localMs = Date.parse(localTime);
+  const incomingMs = Date.parse(incomingTime);
+  if (!Number.isNaN(localMs) && !Number.isNaN(incomingMs)) {
+    return incomingMs >= localMs;
+  }
+  // Fallback for any unparseable value: original lexicographic behaviour.
   return incomingTime >= localTime;
 }
