@@ -51,6 +51,7 @@ export const TABLE_COLUMNS: Record<DirectCloudTable, readonly string[]> = {
     'priority',
     'status',
     'assigned_to_name',
+    'assigned_to_email',
     'assigned_to_contact_id',
     'created_by',
     'pending_since',

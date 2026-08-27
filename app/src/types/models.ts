@@ -39,6 +39,7 @@ export interface Task extends SyncMeta {
   priority: Priority;
   status: TaskStatus;
   assigned_to_name: string | null;
+  assigned_to_email: string | null;
   assigned_to_contact_id: string | null;
   created_by: string;
   pending_since: string;

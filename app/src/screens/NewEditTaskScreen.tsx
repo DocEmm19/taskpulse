@@ -64,7 +64,8 @@ export function NewEditTaskScreen() {
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [priority, setPriority] = useState<Priority>('P2');
-  const [assignedTo, setAssignedTo] = useState('');
+  const [assignedTo, setAssignedTo] = useState(isEdit ? '' : 'Gaurav'); // default assignee
+  const [assigneeEmail, setAssigneeEmail] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [reminderAt, setReminderAt] = useState<Date | null>(null);
   const [remark, setRemark] = useState('');
@@ -126,6 +127,7 @@ export function NewEditTaskScreen() {
       setCategoryId(await canonicalCategoryId(full.task.category_id));
       setPriority(full.task.priority);
       setAssignedTo(full.task.assigned_to_name ?? '');
+      setAssigneeEmail(full.task.assigned_to_email ?? '');
       setDueDate(full.task.due_date ? new Date(full.task.due_date) : null);
       setReminderAt(full.task.reminder_at ? new Date(full.task.reminder_at) : null);
       if (full.travel) {
@@ -161,6 +163,7 @@ export function NewEditTaskScreen() {
           categoryId,
           priority,
           assignedToName: assignedTo || null,
+          assignedToEmail: assigneeEmail.trim() || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
         });
@@ -180,6 +183,7 @@ export function NewEditTaskScreen() {
           categoryId,
           priority,
           assignedToName: assignedTo || null,
+          assignedToEmail: assigneeEmail.trim() || null,
           dueDate: dueDate ? dueDate.toISOString() : null,
           reminderAt: reminderAt ? reminderAt.toISOString() : null,
           initialRemark: noteLines.length ? noteLines.join('\n') : null,
@@ -436,6 +440,17 @@ export function NewEditTaskScreen() {
             />
           </Field>
         </Row>
+
+        <LabeledInput
+          label="Assignee Email (optional)"
+          icon="at-outline"
+          accentColor={fieldAccents.assignedTo.color}
+          value={assigneeEmail}
+          onChangeText={setAssigneeEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          placeholder="name@company.com — used to email the task later"
+        />
 
         <Row isWide={isWide}>
           <Field flex={1}>

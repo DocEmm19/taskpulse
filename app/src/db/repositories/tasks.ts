@@ -28,6 +28,7 @@ export interface NewTaskInput {
   categoryId: string;
   priority: Priority;
   assignedToName?: string | null;
+  assignedToEmail?: string | null;
   dueDate?: string | null;
   reminderAt?: string | null;
   initialRemark?: string | null;
@@ -56,16 +57,17 @@ export async function createTask(input: NewTaskInput): Promise<TaskWithCategory>
 
   await db.runAsync(
     `INSERT INTO tasks (
-      id, title, category_id, priority, status, assigned_to_name, assigned_to_contact_id,
+      id, title, category_id, priority, status, assigned_to_name, assigned_to_email, assigned_to_contact_id,
       created_by, pending_since, due_date, reminder_at, is_starred, completed_at,
       version, sync_status, device_id, created_at, updated_at, deleted_at
-    ) VALUES (?, ?, ?, ?, 'pending', ?, NULL, ?, ?, ?, ?, 0, NULL, 1, 'pending_upload', ?, ?, ?, NULL)`,
+    ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, ?, ?, ?, ?, 0, NULL, 1, 'pending_upload', ?, ?, ?, NULL)`,
     [
       id,
       input.title.trim(),
       input.categoryId,
       input.priority,
       input.assignedToName?.trim() || null,
+      input.assignedToEmail?.trim() || null,
       userId,
       now,
       input.dueDate ?? null,
@@ -101,6 +103,7 @@ export interface TaskPatch {
   priority?: Priority;
   status?: TaskStatus;
   assignedToName?: string | null;
+  assignedToEmail?: string | null;
   dueDate?: string | null;
   reminderAt?: string | null;
   isStarred?: boolean;
@@ -151,6 +154,10 @@ export async function updateTask(id: string, patch: TaskPatch): Promise<void> {
     sets.push('assigned_to_name = ?');
     params.push(patch.assignedToName);
     activityLines.push(patch.assignedToName ? `Assigned to ${patch.assignedToName}` : 'Assignee removed');
+  }
+  if (patch.assignedToEmail !== undefined && patch.assignedToEmail !== before.assigned_to_email) {
+    sets.push('assigned_to_email = ?');
+    params.push(patch.assignedToEmail);
   }
   if (patch.dueDate !== undefined && patch.dueDate !== before.due_date) {
     sets.push('due_date = ?');
