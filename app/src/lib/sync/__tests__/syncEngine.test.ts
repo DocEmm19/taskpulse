@@ -43,6 +43,7 @@ jest.mock('../pull', () => ({
 jest.mock('../../../db/database', () => ({
   __esModule: true,
   getDb: jest.fn(),
+  setMeta: jest.fn(), // runSyncCycle records sync.lastOkAt (P0 sync pill)
 }));
 
 import NetInfo from '@react-native-community/netinfo';
@@ -260,6 +261,7 @@ describe('connectivity — web path never calls NetInfo', () => {
     jest.doMock('../../../db/database', () => ({
       __esModule: true,
       getDb: jest.fn(async () => makeEmptyQueueDb()),
+      setMeta: jest.fn(),
     }));
 
     (global as any).navigator = { onLine };

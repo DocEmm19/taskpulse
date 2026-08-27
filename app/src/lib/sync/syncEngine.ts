@@ -1,6 +1,6 @@
 import NetInfo from '@react-native-community/netinfo';
 import { readFileBytes, persistDownloadedFile } from '../localFiles';
-import { getDb } from '../../db/database';
+import { getDb, setMeta } from '../../db/database';
 import { getSupabase, isSupabaseConfigured, ATTACHMENTS_BUCKET } from './supabaseClient';
 import { getCurrentUserId } from '../../store/sessionStore';
 import { notifyTablesChanged } from '../../db/events';
@@ -149,6 +149,11 @@ export async function runSyncCycle(): Promise<void> {
     for (const att of missingFiles) {
       await pullAttachmentFile(att.id).catch((err) => console.warn(`[sync] attachment download failed for ${att.id}:`, err));
     }
+
+    // Cycle completed without throwing — record it so the Home sync pill can
+    // show "Synced <n>m ago" and, by contrast, surface a stall. See syncHealth.ts.
+    await setMeta('sync.lastOkAt', new Date().toISOString());
+    notifyTablesChanged('sync_queue');
   } finally {
     isRunning = false;
   }
