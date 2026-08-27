@@ -37,7 +37,7 @@ const TASK_SELECT = `
   SELECT t.*,
          COALESCE(c.name, 'Task') as category_name,
          COALESCE(c.color_hex, '#8E8E93') as category_color,
-         c.icon as category_icon
+         COALESCE(c.icon, 'pricetag-outline') as category_icon
   FROM tasks t
   LEFT JOIN task_categories c ON c.id = t.category_id
 `;
