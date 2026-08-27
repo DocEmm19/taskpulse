@@ -1,6 +1,7 @@
 import { getDb } from '../database';
 import { newId } from '../../lib/uuid';
 import { notifyTablesChanged } from '../events';
+import { getMeta, setMeta } from '../database';
 import { nowIso, enqueueSync } from '../helpers';
 import { getCurrentUserId } from '../../store/sessionStore';
 import { TaskCategory } from '../../types/models';
@@ -11,6 +12,7 @@ const DEFAULTS: Array<Omit<TaskCategory, 'id' | 'created_by' | 'created_at' | 'u
   { name: 'Official', color_hex: colors.categoryOfficial, icon: 'briefcase-outline', is_default: 1, sort_order: 1 },
   { name: 'Travel', color_hex: colors.categoryTravel, icon: 'airplane-outline', is_default: 1, sort_order: 2 },
   { name: 'Urgent', color_hex: colors.categoryUrgent, icon: 'alert-circle-outline', is_default: 1, sort_order: 3 },
+  { name: 'Network', color_hex: '#0EA5E9', icon: 'people-outline', is_default: 1, sort_order: 4 },
 ];
 
 /** Idempotent — safe to call on every app start. Seeds the 4 required default
@@ -38,6 +40,31 @@ export async function ensureDefaultCategories(): Promise<void> {
     await enqueueSync('task_category', id, 'CREATE', { name: cat.name, color_hex: cat.color_hex, icon: cat.icon });
   }
   notifyTablesChanged('task_categories');
+}
+
+const NETWORK_MIGRATION_FLAG = 'category_network_v1';
+
+/** One-time backfill of the "Network" default category for devices that were
+ * seeded before it existed (new installs get it via ensureDefaultCategories).
+ * Flag-gated so it runs exactly once — it will NOT re-add Network if the user
+ * later deletes it (unlike the initial seed's all-or-nothing guard). Owned by
+ * the current user and enqueued so it syncs like any other category. */
+export async function ensureNetworkCategoryOnce(): Promise<void> {
+  if (await getMeta(NETWORK_MIGRATION_FLAG)) return;
+  const db = await getDb();
+  const existing = await db.getFirstAsync<{ c: number }>(`SELECT COUNT(*) c FROM task_categories WHERE name = 'Network'`);
+  if (!existing || existing.c === 0) {
+    const now = nowIso();
+    const id = newId();
+    await db.runAsync(
+      `INSERT INTO task_categories (id, name, color_hex, icon, is_default, sort_order, created_by, created_at, updated_at)
+       VALUES (?, 'Network', '#0EA5E9', 'people-outline', 1, 4, ?, ?, ?)`,
+      [id, getCurrentUserId(), now, now]
+    );
+    await enqueueSync('task_category', id, 'CREATE', { name: 'Network', color_hex: '#0EA5E9', icon: 'people-outline' });
+    notifyTablesChanged('task_categories');
+  }
+  await setMeta(NETWORK_MIGRATION_FLAG, new Date().toISOString());
 }
 
 export async function listCategories(): Promise<TaskCategory[]> {
