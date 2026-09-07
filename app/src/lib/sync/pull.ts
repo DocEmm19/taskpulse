@@ -32,6 +32,28 @@ import type { getSupabase as GetSupabaseFn } from './supabaseClient';
 
 const DEFAULT_WATERMARK = '1970-01-01T00:00:00Z';
 
+// Overlap the pull window by this much so a row that COMMITTED after our last
+// pull but whose `updated_at` (Postgres now() = transaction-START time) is below
+// our stored max is still re-fetched, instead of being skipped forever. This is
+// the fix for edits intermittently not syncing: `gt('updated_at', watermark)`
+// alone loses any row whose commit lands after a concurrent pull's snapshot.
+// Reconcile is last-write-wins/idempotent, so re-fetching recent rows is safe;
+// we only re-apply ones strictly newer than the local copy (see the loop), so
+// there's no render churn. 5 min comfortably covers commit latency and any
+// residual clock skew for a workspace this size.
+const PULL_OVERLAP_MS = 5 * 60 * 1000;
+
+/** Rewinds an ISO watermark by PULL_OVERLAP_MS for the fetch query only (the
+ * stored watermark still advances to the true max). Leaves a non-parseable or
+ * default (epoch) watermark untouched. Pure — unit-tested. */
+export function overlapWatermark(watermark: string, overlapMs: number = PULL_OVERLAP_MS): string {
+  const ms = Date.parse(watermark);
+  if (Number.isNaN(ms)) return watermark;
+  const rewound = ms - overlapMs;
+  if (rewound <= 0) return watermark; // already at/near epoch — nothing to gain
+  return new Date(rewound).toISOString();
+}
+
 const WATERMARK_RESET_FLAG = 'sync.watermarkReset.v1';
 
 /** One-time self-heal for the client-clock watermark bug. Older builds advanced
@@ -205,7 +227,7 @@ export async function pullDirectTables(deps?: PullDeps): Promise<string[]> {
     const watermarkKey = `last_pull:${table}`;
     const watermark = (await d.getMeta(watermarkKey)) ?? DEFAULT_WATERMARK;
 
-    const { data, error } = await supabase.from(table).select().gt('updated_at', watermark).order('updated_at', { ascending: true });
+    const { data, error } = await supabase.from(table).select().gt('updated_at', overlapWatermark(watermark)).order('updated_at', { ascending: true });
     if (error) {
       // Distinguish "the fetch failed" from "0 rows changed" — stay resilient
       // (don't throw) so one bad table doesn't block the rest of the pull.
@@ -229,7 +251,15 @@ export async function pullDirectTables(deps?: PullDeps): Promise<string[]> {
       const local = (await d.db.getRow(table, id)) as { updated_at?: string | null } | null;
       const incomingForReconcile = incoming as { updated_at?: string | null; deleted_at?: string | null };
 
-      if (shouldApplyIncoming(local, incomingForReconcile)) {
+      // Apply only rows STRICTLY newer than the local copy. shouldApplyIncoming
+      // allows equal (>=); with the overlap window that would re-write unchanged
+      // rows on every pull (needless writes + re-renders). New rows (local null)
+      // always apply.
+      const localTs = local?.updated_at ?? null;
+      const applies =
+        shouldApplyIncoming(local, incomingForReconcile) &&
+        (localTs === null || incomingUpdatedAt == null || Date.parse(incomingUpdatedAt) > Date.parse(localTs));
+      if (applies) {
         await d.db.upsertRow(table, columns, incoming);
         tableChanged = true;
         if (table === 'tasks') changedTaskIds.push(id);
