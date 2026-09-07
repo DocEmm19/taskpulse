@@ -1,4 +1,4 @@
-import { pullDirectTables, pullTaskChildren, PullChildrenDb, PullDb, PullableSupabaseClient } from '../pull';
+import { pullDirectTables, pullTaskChildren, overlapWatermark, PullChildrenDb, PullDb, PullableSupabaseClient } from '../pull';
 
 // ----------------------------------------------------------------------------
 // Fakes — no real Supabase client, no real SQLite. `makeFakeSupabase` mimics
@@ -145,7 +145,10 @@ test('uses the stored watermark for the gt() filter on subsequent pulls', async 
   });
 
   const contactsCall = calls.find((c) => c.table === 'contacts');
-  expect(contactsCall?.gtValue).toBe('2026-02-01T00:00:00Z');
+  // The gt() filter now queries from the watermark rewound by the 5-min overlap
+  // (commit-race fix) — not the raw stored watermark.
+  expect(contactsCall?.gtValue).toBe('2026-01-31T23:55:00.000Z');
+  // The STORED watermark still advances to the true max updated_at seen.
   expect(meta['last_pull:contacts']).toBe('2026-02-02T00:00:00Z');
 });
 
@@ -424,4 +427,37 @@ describe('pullTaskChildren', () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('task_remarks'), expect.anything());
     warnSpy.mockRestore();
   });
+});
+
+describe('overlapWatermark (commit-race fix)', () => {
+  test('rewinds an ISO watermark by the overlap', () => {
+    expect(overlapWatermark('2026-08-27T12:00:00.000Z', 5 * 60 * 1000)).toBe('2026-08-27T11:55:00.000Z');
+  });
+  test('leaves epoch/default and unparseable watermarks untouched', () => {
+    expect(overlapWatermark('1970-01-01T00:00:00Z')).toBe('1970-01-01T00:00:00Z');
+    expect(overlapWatermark('not-a-date')).toBe('not-a-date');
+  });
+});
+
+test('re-fetches a row that committed with updated_at just BELOW the watermark (the edit-not-syncing race)', async () => {
+  const db = makeFakeDb(); // this device has no local copy of t-late yet
+  const { getMeta, setMeta, meta } = makeMetaStore();
+  meta['last_pull:tasks'] = '2026-08-27T12:00:00.000Z'; // watermark already advanced past 12:00
+
+  const { client } = makeFakeSupabase({
+    tasks: [
+      // Peer's edit: its updated_at (txn-start) is 11:59 but it only became
+      // visible after this device's previous pull — below the watermark, but
+      // WITHIN the 5-min overlap, so it must still be re-fetched and applied.
+      { id: 't-late', title: 'edit that must not be lost', updated_at: '2026-08-27T11:59:00.000Z' },
+      // Older than the overlap window — correctly NOT re-fetched.
+      { id: 't-ancient', title: 'too old', updated_at: '2026-08-27T11:50:00.000Z' },
+    ],
+  });
+
+  const changed = await pullDirectTables({ getSupabase: () => client, db, getMeta, setMeta, notifyTablesChanged: () => {} });
+
+  expect(db.store['tasks:t-late']?.title).toBe('edit that must not be lost'); // caught by the overlap
+  expect(db.store['tasks:t-ancient']).toBeUndefined(); // outside the overlap, not fetched
+  expect(changed).toEqual(['t-late']);
 });
